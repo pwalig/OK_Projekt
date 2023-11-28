@@ -1,3 +1,4 @@
 *
-!*.cpp
-!*.hpp
+!code/
+!code/*.cpp
+!code/*.hpp
