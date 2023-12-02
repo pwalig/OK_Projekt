@@ -3,6 +3,8 @@
 
 #include <chrono>
 #include <fstream> // std::ifstream, std::ofstream
+#include <cmath> // std::max
+#include <stdexcept> // throw error types
 
 using namespace knapsack_solver;
 using std::vector;
@@ -10,8 +12,6 @@ using std::ostream;
 using std::cout;
 using std::endl;
 using nlohmann::json;
-
-//#define _DEBUG_MODE_
 
 //----------Solution Definitions----------
 
@@ -34,12 +34,21 @@ void Solution::AddItem(const Problem & problem, const int & selected_item_id, st
     for (int j = 0; j < remainingSpace.size(); ++j){
         remainingSpace[j] -= problem.items[selected_item_id].weights[j];
         if (remainingSpace[j] < 0) {
-            cout << "pack full\n";
-            throw;
+            throw std::invalid_argument("item does not fit");
         }
     }
     this->max_value += problem.items[selected_item_id].value; // update max value
+    if (this->selected[selected_item_id] == true) throw std::invalid_argument("item was already in the solution");
     this->selected[selected_item_id] = true; // add item to solution
+}
+
+void Solution::RemoveItem(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace){
+    for (int j = 0; j < remainingSpace.size(); ++j){
+        remainingSpace[j] += problem.items[selected_item_id].weights[j];
+    }
+    this->max_value -= problem.items[selected_item_id].value; // update max value
+    if (this->selected[selected_item_id] == false) throw std::invalid_argument("item was not in the solution");
+    this->selected[selected_item_id] = false; // remove item from solution
 }
 
 void Solution::AddItemIfFits(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace){
@@ -128,6 +137,7 @@ PackagedSolution KnapsackSolver::Greedy(const Problem & problem, Requirements re
         break;
     
     default:
+        cout << "Not implemented yet\n";
         break;
     }
 
@@ -177,133 +187,6 @@ PackagedSolution KnapsackSolver::BranchAndBound(const Problem & problem, Require
     ps.remainingSpaces = CalculateRemainingSpaces(s, problem);
 
     return ps;
-}
-
-Solution KnapsackSolver::FirstFit(const Problem & problem){
-    int subk = problem.knapsack_sizes.size();
-    int isiz = problem.items.size();
-    Solution solution(isiz);
-
-    vector<int> fills = problem.knapsack_sizes;
-
-    bool* checked = new bool[isiz];
-    int checkedCount;
-    for (checkedCount = 0; checkedCount < isiz; ++checkedCount) checked[checkedCount] = false;
-
-    int testedItem = 0;
-    checkedCount = 0;
-    while(checkedCount < isiz) { // exit when all checked
-        // item checked
-        checked[testedItem] = true;
-        checkedCount++;
-        int nextItem = 0;
-
-        bool fits = true;
-        for (int j = 0; j < subk; ++j) {if(fills[j] - problem.items[testedItem].weights[j] < 0) {fits = false;}}
-        if (fits){
-
-            // add item to the answer
-            solution.selected[testedItem] = true;
-            solution.max_value += problem.items[testedItem].value;
-
-            // fill knapsack - reduce remaining space
-            for (int j = 0; j < subk; ++j) fills[j] -= problem.items[testedItem].weights[j];
-
-            // choose next item
-            int connectionsIterator = 0;
-            do{
-                nextItem = problem.items[testedItem].connections[connectionsIterator];
-            }while(nextItem < isiz && checked[nextItem] && ++connectionsIterator < problem.items[testedItem].connections.size());
-            if (nextItem == isiz) break;
-        }
-        else {
-            // choose next item
-            while(nextItem < isiz && checked[nextItem]){
-                ++nextItem;
-            }
-            if (nextItem == isiz) break;
-        }
-        testedItem = nextItem;
-    }
-    delete[] checked;
-    return solution;
-}
-
-Solution KnapsackSolver::RandomFit(const Problem & problem){
-    int subk = problem.knapsack_sizes.size();
-    int isiz = problem.items.size();
-    Solution solution(isiz);
-
-    vector<int> fills = problem.knapsack_sizes;
-
-    bool* checked = new bool[isiz];
-    int checkedCount = 0;
-    for (int j = 0; j < isiz; ++j) checked[j] = false;
-
-    int testedItem = rand() % isiz;
-    while(checkedCount < isiz) { // exit when all checked
-        ////////////////cout << "official check: " << testedItem << endl;
-        // item checked
-        checked[testedItem] = true;
-        checkedCount++;
-
-        int nextItem = 0;
-
-        bool fits = true;
-        for (int j = 0; j < subk; ++j) {if(fills[j] - problem.items[testedItem].weights[j] < 0) {fits = false;}}
-        if (fits){
-            /////////////cout << "fits!" << endl;
-
-            // add item to the answer
-            solution.selected[testedItem] = true;
-            solution.max_value += problem.items[testedItem].value;
-
-            // fill knapsack - reduce remaining space
-            for (int j = 0; j < subk; ++j) fills[j] -= problem.items[testedItem].weights[j];
-
-
-            // choose next item
-            int connectionsAmount = problem.items[testedItem].connections.size();
-            vector<bool> nextCheckedFit;
-            int nextCheckedCount = 0;
-            for (int j = 0; j < connectionsAmount; ++j) nextCheckedFit.push_back(false);
-
-            do{
-                nextItem = problem.items[testedItem].connections[rand() % connectionsAmount]; // try this one
-                ///////////cout << "trying next: " << nextItem << endl;
-
-                if (!nextCheckedFit[nextItem]){ // if this one was not tried before -> now it was -> note that
-                    ++nextCheckedCount;
-                    nextCheckedFit[nextItem] = true;
-                }
-
-            }while(nextCheckedCount < connectionsAmount && checked[nextItem]);
-            if (nextCheckedCount >= connectionsAmount) break; // if all were tried -> stop
-        }
-        else {
-            ///////////////cout << "no fit :(" << endl;
-            // choose next item
-            vector<bool> nextChecked;
-            int nextCheckedCount = 0;
-            for (int j = 0; j < isiz; ++j) nextChecked.push_back(false);
-            do{
-                nextItem = rand() % isiz; // try this one
-                //cout << "trying next nf: " << nextItem << endl;
-
-                if (!nextChecked[nextItem]){ // if this one was not tried before -> now it was -> note that
-                    ++nextCheckedCount;
-                    nextChecked[nextItem] = true;
-                }
-                ///////////////for (int j = 0; j < isiz; ++j) cout << " " << nextChecked[j];
-                ////////////////cout << endl;
-
-            }while(nextCheckedCount < isiz && checked[nextItem]);
-            if (nextCheckedCount >= isiz) break; // if all were tried -> stop
-        }
-        testedItem = nextItem;
-    }
-    delete[] checked;
-    return solution;
 }
 
 
@@ -468,4 +351,141 @@ Solution KnapsackSolver::BranchAndBoundPath(const Problem & problem) {
     }
 
     return globalSolution;
+}
+
+
+//---------- Floyd ----------
+
+PackagedSolution Floyd::Solve(const Problem & problem, Requirements requirements){
+    PackagedSolution ps;
+    std::chrono::steady_clock::time_point start, end;
+    Solution s;
+
+    switch (requirements.structureToFind)
+    {
+    case Requirements::StructureToFind::PATH:
+        start = std::chrono::steady_clock::now();
+        s = Path(problem);
+        end = std::chrono::steady_clock::now();
+        ps.algorithm = "floyd path";
+        break;
+    
+    default:
+        cout << "Not implemented yet\n";
+        break;
+    }
+
+    // construct packaged solution
+    ps.solution = s;
+    const std::chrono::duration<double> elapsed_seconds{end - start};
+    ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
+    ps.to_optimum_ratio = s.max_value / requirements.known_optimum;
+    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem);
+
+    return ps;
+}
+
+//#define DEBUG_FLOYD_PATH
+
+Solution Floyd::Path(const Problem & problem){
+    int isiz = problem.items.size(); // instance size
+
+    struct SolutionProgress{
+        Solution solution;
+        vector<int> remainingSpace;
+        SolutionProgress(const int & instance_size, const vector<int> & remaining) : solution(instance_size), remainingSpace(remaining){}
+    };
+
+
+    // Fill initial D vector
+    vector<vector<SolutionProgress>> d;
+    for (int i = 0; i < isiz; ++i) {
+        vector<SolutionProgress> di;
+
+        // if you can't fit element fill whole row with invalid answers
+        if (!KnapsackSolver::Fits(problem.items[i].weights, problem.knapsack_sizes)) {
+            SolutionProgress sp(isiz, problem.knapsack_sizes);
+            sp.solution.max_value = -1;
+            for (int j = 0; j < isiz; ++j) di.push_back(sp);
+        }
+        else {
+            for (int j = 0; j < isiz; ++j){
+                SolutionProgress sp(isiz, problem.knapsack_sizes);
+                sp.solution.AddItem(problem, i, sp.remainingSpace); // i did fit, so add it
+
+                if (!KnapsackSolver::Fits(problem.items[j].weights, problem.knapsack_sizes)) {
+                    sp.solution.RemoveItem(problem, i, sp.remainingSpace);
+                    sp.solution.max_value = -1; // item j does not fit - solution invalid
+                }
+                else if (problem.items[i].HasConnectionTo(j)) sp.solution.AddItem(problem, j, sp.remainingSpace);
+                else {
+                    sp.solution.RemoveItem(problem, i, sp.remainingSpace);
+                    sp.solution.max_value = -2; // items lack connection - solution invalid
+                }
+                di.push_back(sp);
+            }
+        }
+        d.push_back(di);
+    }
+
+#ifdef DEBUG_FLOYD_PATH
+    for (int i = 0; i < isiz; ++i) {
+        for (int j = 0; j < isiz; ++j){
+            cout << d[i][j].solution.max_value << "\t";
+        }
+        cout << endl;
+    }
+#endif
+
+    // Solve
+    for (int k = 0; k < isiz; ++k){
+        for (int i = 0; i < isiz; ++i){
+            for (int j = 0; j < isiz; ++j){
+                if (d[i][k].solution.max_value >= 0 && d[k][j].solution.max_value >= 0 && // if you can get from i to k and from k to j
+                    !d[i][j].solution.selected[k] &&
+                    d[i][j].solution.max_value != -1 && // items dont fit anyway
+                    KnapsackSolver::Fits(problem.items[k].weights, d[i][j].remainingSpace) && // initial fit check
+                    d[i][k].solution.max_value + d[k][j].solution.max_value > d[i][j].solution.max_value)
+                {   
+                    if (d[i][j].solution.max_value == -2){ // if items lacked connection but now have it through item k
+                        d[i][j].solution.max_value = 0;
+                        d[i][j].solution.AddItem(problem, i, d[i][j].remainingSpace);
+                        if (i != j) d[i][j].solution.AddItem(problem, j, d[i][j].remainingSpace);
+                        if (!KnapsackSolver::Fits(problem.items[k].weights, d[i][j].remainingSpace)) { // if k stopped to fit after adding i and j
+                            d[i][j].solution.RemoveItem(problem, i, d[i][j].remainingSpace);
+                            if (i != j) d[i][j].solution.RemoveItem(problem, j, d[i][j].remainingSpace);
+                            d[i][j].solution.max_value = -2;
+                            continue;
+                        }
+                        else d[i][j].solution.AddItem(problem, k, d[i][j].remainingSpace);
+                    }
+                    else d[i][j].solution.AddItem(problem, k, d[i][j].remainingSpace);
+                }
+            }
+        }
+    
+#ifdef DEBUG_FLOYD_PATH
+        cout << endl << "through: " << k << endl;
+        for (int i = 0; i < isiz; ++i) {
+            for (int j = 0; j < isiz; ++j){
+                cout << d[i][j].solution.max_value << "\t";
+            }
+            cout << endl;
+        }
+#endif
+    }
+
+    // Find Best Solution
+    int maxi, maxj, maxval = 0;
+    for (int i = isiz - 1; i >= 0; --i) {
+        for (int j = isiz - 1; j >= 0; --j){
+            if (d[i][j].solution.max_value > maxval){
+                maxval = d[i][j].solution.max_value;
+                maxi = i;
+                maxj = j;
+            }
+        }
+    }
+
+    return d[maxi][maxj].solution;
 }
