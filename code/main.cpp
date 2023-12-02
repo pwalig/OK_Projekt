@@ -1,7 +1,8 @@
-#include <iostream>
+#include <iostream> // cout, endl
 #include <vector>
-#include <random>
-#include <time.h>
+
+#include <cstdlib> // std::srand()
+#include <ctime> // std::time()
 
 #include "Problem.hpp"
 #include "KnapsackSolver.hpp"
@@ -12,12 +13,21 @@ using std::cout;
 using std::endl;
 
 int main() {
-    srand(time(NULL) * 1000);
-    int instance_size = 17;
-    vector<int> ks;
-    ks.push_back(25);
-    Problem p(instance_size, 1, ks, 10, 10, 0.4);
+    std::srand(std::time(0) * 1000);
+    cout << "Random value on [0, " << RAND_MAX << "]: " << std::rand() << '\n';
 
+    Problem::GenerationSettings gs;
+    gs.instance_size = 17;
+    gs.sub_knapsacks = 1;
+    gs.randomize_knapsack_sizes = true;
+    gs.knapsack_size_limit_exclusive = 50;
+    gs.value_limit_exclusive = 10;
+    gs.weight_limit_exclusive = 10;
+    gs.connection_density = 0.5;
+
+    Problem::BatchGenerateProblemsJSON(gs, 25, "../tests", "batch1", "problem");
+
+    Problem p("../tests/batch1/problems/problem0.json");
     cout << p;
 
     Requirements rq;
@@ -29,7 +39,9 @@ int main() {
     rq.structureToFind = Requirements::StructureToFind::PATH;
 
     cout << KnapsackSolver::BranchAndBound(p, rq) << endl;
-    cout << KnapsackSolver::BruteForce(p, rq) << endl;
+    PackagedSolution ps = KnapsackSolver::BruteForce(p, rq);
+    cout << ps << endl;
+    ps.ExportJSON("../tests/json/res.json");
 
     return 0;
 }

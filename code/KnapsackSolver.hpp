@@ -1,7 +1,7 @@
 #pragma once
 
+#include <iostream> // std::ostream, std::ifstream
 #include <vector>
-#include <iostream>
 #include <string>
 
 #include "Problem.hpp"
@@ -24,12 +24,15 @@ class Solution {
     void AddItemIfFits(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace);
 };
 
-struct PackagedSolution {
-    std::string algorithm;
-    Solution solution;
-    double to_optimum_ratio;
-    double solve_time;
-    std::vector<int> remainingSpaces;
+class PackagedSolution {
+    public:
+        std::string algorithm;
+        Solution solution;
+        double to_optimum_ratio;
+        double solve_time;
+        std::vector<int> remainingSpaces;
+    
+    void ExportJSON(const std::string file_name);
 };
 
 class KnapsackSolver{

@@ -1,7 +1,8 @@
 #pragma once
 
+#include <iostream> // std::ostream, std::ifstream
 #include <vector>
-#include <iostream>
+#include <string>
 
 class Item {
     public:
@@ -27,21 +28,49 @@ struct Requirements {
 
 class Problem {
     private:
-    void GenerateInnerItems(const int & instance_size, const int & sub_knackpacks, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+    void GenerateInnerItems(const int & instance_size, const int & sub_knapsacks, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
 
     public:
     std::vector<int> knapsack_sizes;
     std::vector<Item> items;
 
-    Problem(const int & instance_size, const int & sub_knackpacks, const std::vector<int> fixed_knapsack_sizes, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
-    Problem(const int & instance_size, const int & sub_knackpacks, const int & knapsack_size_limit_exclusive, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+    struct GenerationSettings{
+        int instance_size;
+        int sub_knapsacks;
+        bool randomize_knapsack_sizes;
+        int knapsack_size_limit_exclusive;
+        std::vector<int> fixed_knapsack_sizes;
+        int value_limit_exclusive;
+        int weight_limit_exclusive;
+        double connection_density;
+    };
 
-    static std::vector<Item> GenerateItemsVector(const int & instance_size, const int & sub_knackpacks, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+    Problem(const std::string & file_name);
+    Problem(const GenerationSettings & gs);
+    Problem(const int & instance_size, const int & sub_knapsacks, const std::vector<int> fixed_knapsack_sizes, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+    Problem(const int & instance_size, const int & sub_knapsacks, const int & knapsack_size_limit_exclusive, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+
+    void ExportJSON(const std::string & file_name) const;
+
+    static std::vector<Item> GenerateItemsVector(const int & instance_size, const int & sub_knapsacks, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density);
+
+    /// @brief creates one .json file named in directory and name specified in <file_name>
+    /// @param gs GenerationSettings struct found in Problem::GenerationSettings
+    /// @param file_name full path and file name with file extension
+    static void GenerateProblemJSON(const GenerationSettings & gs, const std::string file_name);
+
+    /// @brief creates a folder named <batch_name> inside <directory_path> with a subfolder "problems"
+    /// @param gs GenerationSettings struct found in Problem::GenerationSettings
+    /// @param file_name general problem file name. x.json will be appended at the end, where x is the file number.
+    static void BatchGenerateProblemsJSON(const GenerationSettings & gs, const int & amount, const std::string & directory_path, const std::string & batch_name, const std::string & file_name);
 
     enum class SortMode {WEIGHT_VALUE_RATIO, WEIGHT, VALUE};
+
     // DON'T USE
     // leaves connections unchanged and this messes up the problem
+    /// @deprecated use GetSortedItemIds instead
     void SortItems(const SortMode & sortMode);
+    
     std::vector<int> GetSortedItemIds(const SortMode & sortMode) const;
     int GetValueSum() const;
 };

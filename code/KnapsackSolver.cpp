@@ -1,12 +1,15 @@
 #include "KnapsackSolver.hpp"
+#include "json.hpp"
 
 #include <chrono>
+#include <fstream> // std::ifstream, std::ofstream
 
 using namespace knapsack_solver;
 using std::vector;
 using std::ostream;
 using std::cout;
 using std::endl;
+using nlohmann::json;
 
 //#define _DEBUG_MODE_
 
@@ -55,6 +58,21 @@ void Solution::AddItemIfFits(const Problem & problem, const int & selected_item_
 
 
 //----------Packaged Solution Definitions----------
+
+void PackagedSolution::ExportJSON(const std::string file_name){
+    json data;
+    data["algorithm"] = algorithm;
+    data["to_optimum_ratio"] = to_optimum_ratio;
+    data["solve_time"] = solve_time;
+    data["remaining_spaces"] = remainingSpaces;
+    data["solution"]["max_value"] = solution.max_value;
+    for (int i = 0; i < solution.selected.size(); ++i){
+        data["solution"]["selected"][i] = solution.selected[i];
+    }
+    std::ofstream fout(file_name);
+    fout << data.dump(4);
+    fout.close();
+}
 
 ostream& operator<<(ostream& os, const PackagedSolution& ps){
     os << "solved with: " << ps.algorithm << endl << ps.solution;
