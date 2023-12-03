@@ -2,7 +2,7 @@
 #include "UtilityFunctions.hpp"
 #include "json.hpp"
 
-#include <algorithm> // std::sort
+#include <algorithm> // std::sort, std::find
 #include <fstream> // std::ifstream, std::ofstream
 #include <filesystem> // std::filesystem::create_directory
 
@@ -11,6 +11,7 @@ using std::vector;
 using std::ostream;
 using std::endl;
 using nlohmann::json;
+using namespace knapsack_solver;
 
 
 //---------Item----------
@@ -214,6 +215,21 @@ vector<int> Problem::GetSortedItemIds(const SortMode & sortMode) const{
         });
         break;
     
+    case SortMode::RANDOM:
+    {
+        vector<int> sortedIds;
+        while (sortedIds.size() < this->items.size())
+        {
+            int itemId = std::rand() % this->items.size();
+            while (std::find(sortedIds.begin(), sortedIds.end(), itemId) != sortedIds.end()){
+                itemId = std::rand() % this->items.size();
+            }
+            sortedIds.push_back(itemId);
+        }
+        return sortedIds;
+        break;
+    }
+
     default:
         break;
     }

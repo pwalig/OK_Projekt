@@ -4,6 +4,9 @@
 #include <vector>
 #include <string>
 
+
+namespace knapsack_solver{
+
 class Item {
     public:
     int value;
@@ -11,18 +14,23 @@ class Item {
     std::vector<int> connections;
     
     Item(const int & value, const std::vector<int> & weights, const std::vector<int> & connections);
-    friend std::ostream& operator<<(std::ostream & os, const Item & item);
 
     bool HasConnectionTo(const int & id) const;
     int GetWeightSum() const;
 };
 
 struct Requirements {
-    enum class StructureToFind { PATH, CYCLE, TREE, CONNECTED_GRAPH, IGNORE_CONNECTIONS };
+    bool directed = true;
+
+    enum class CycleGuarantee { CONTAINS_CYCLE, NO_CYCLE, NO_GUARANTEES };
+    CycleGuarantee cycleGuarantee = CycleGuarantee::NO_GUARANTEES;
+
+    enum class StructureToFind { CYCLE, PATH, TREE, CONNECTED_GRAPH, IGNORE_CONNECTIONS };
     StructureToFind structureToFind = StructureToFind::PATH;
+
     enum class WeightTreatment { IGNORE_ALL, RESPECT_ALL, RESPECT_FIRST_ONLY, SET_ALL_TO_1 };
     WeightTreatment weightTreatment = WeightTreatment::RESPECT_ALL;
-    bool directed = true;
+
     int known_optimum = -1;
 };
 
@@ -64,7 +72,7 @@ class Problem {
     /// @param file_name general problem file name. x.json will be appended at the end, where x is the file number.
     static void BatchGenerateProblemsJSON(const GenerationSettings & gs, const int & amount, const std::string & directory_path, const std::string & batch_name, const std::string & file_name);
 
-    enum class SortMode {WEIGHT_VALUE_RATIO, WEIGHT, VALUE};
+    enum class SortMode {WEIGHT_VALUE_RATIO, WEIGHT, VALUE, RANDOM, DONT_SORT};
 
     // DON'T USE
     // leaves connections unchanged and this messes up the problem
@@ -75,4 +83,31 @@ class Problem {
     int GetValueSum() const;
 };
 
-std::ostream& operator<<(std::ostream & os, const Problem & p);
+class PackagedProblem{
+    public:
+    Problem problem;
+
+    bool directed = true;
+
+    enum class CycleGuarantee { CONTAINS_CYCLE, NO_CYCLE, NO_GUARANTEES };
+    CycleGuarantee cycleGuarantee = CycleGuarantee::NO_GUARANTEES;
+
+    enum class StructureToFind { CYCLE, PATH, TREE, CONNECTED_GRAPH, IGNORE_CONNECTIONS };
+    StructureToFind structureToFind = StructureToFind::PATH;
+
+    enum class WeightTreatment { IGNORE_ALL, RESPECT_ALL, RESPECT_FIRST_ONLY, SET_ALL_TO_1 };
+    WeightTreatment weightTreatment = WeightTreatment::RESPECT_ALL;
+
+    int known_optimum = -1;
+    
+    PackagedProblem(const std::string & file_name);
+    PackagedProblem(const Problem::GenerationSettings & gs);
+
+    void ExportJSON(const std::string & file_name) const;
+};
+
+} // namesapace knapsack_solver
+
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::Item & item);
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::Problem & p);
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::PackagedProblem & pp);
