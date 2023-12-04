@@ -17,7 +17,7 @@ int main() {
     cout << "Random value on [0, " << RAND_MAX << "]: " << std::rand() << '\n';
 
     Problem::GenerationSettings gs;
-    gs.instance_size = 15;
+    gs.instance_size = 18;
     gs.sub_knapsacks = 1;
     gs.randomize_knapsack_sizes = false;
     gs.knapsack_size_limit_exclusive = 25;
@@ -27,21 +27,25 @@ int main() {
     gs.connection_density = 0.1;
 
     Problem::Requirements rq;
+    rq.structureToFind = Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS;
 
     PackagedProblem pp (gs, rq);
 
     cout << GreedySolver::Solve(pp, {Problem::SortMode::WEIGHT_VALUE_RATIO, 1}) << endl;
+    cout << GreedySolver::Solve(pp, {Problem::SortMode::WEIGHT, 1}) << endl;
+    cout << GreedySolver::Solve(pp, {Problem::SortMode::VALUE, 1}) << endl;
 
-    BranchAndBoundSolver::Options op;
-    cout << BranchAndBoundSolver::Solve(pp, op) << endl;
-    op.late_fit = true;
-    cout << BranchAndBoundSolver::Solve(pp, op) << endl;
-
-
-    /*cout << KnapsackSolver::BranchAndBound(p, rq) << endl;
-    PackagedSolution ps = KnapsackSolver::BruteForce(p, rq);
-    cout << ps << endl;
-    ps.ExportJSON("../tests/json/res.json");*/
+    BruteForceSolver::Options bop;
+    bop.iterative = true;
+    bop.search_order = BruteForceSolver::Options::SearchOrder::ZERO_FIRST;
+    cout << BruteForceSolver::Solve(pp, bop) << endl;
+    bop.search_order = BruteForceSolver::Options::SearchOrder::ONE_FIRST;
+    cout << BruteForceSolver::Solve(pp, bop) << endl;
+    bop.iterative = false;
+    bop.late_fit = true;
+    cout << BruteForceSolver::Solve(pp, bop) << endl;
+    bop.late_fit = false;
+    cout << BruteForceSolver::Solve(pp, bop) << endl;
 
     return 0;
 }

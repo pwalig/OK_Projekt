@@ -12,21 +12,20 @@ class Solution {
     public:
     int max_value;
     std::vector<bool> selected;
-    Solution();
-    Solution(int InstanceSize);
+    std::vector<int> remainingSpace;
+    bool valid;
 
-    // WARNING - destructive method
-    // method modifies this solution and remainingSpace vector
-    void AddItem(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace);
+
+    Solution();
+    Solution(const int & InstanceSize, const std::vector<int> & available_space);
+
+    void AddItem(const Problem & problem, const int & selected_item_id);
+    void AddItemForce(const Problem & problem, const int & selected_item_id);
+    void RemoveItem(const Problem & problem, const int & selected_item_id);
+    bool Fits(const Problem & problem, const int & selected_item_id);
     
-    // WARNING - destructive method
-    // method modifies this solution and remainingSpace vector
-    void RemoveItem(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace);
-    
-    // WARNING - destructive method
-    // method modifies this solution and remainingSpace vector
-    /// @returns true if addition was succesfull, false if item did not fit
-    bool AddItemIfFits(const Problem & problem, const int & selected_item_id, std::vector<int> & remainingSpace);
+    /// @returns true if addition was succesfull, false if item did not fit or was already in solution
+    bool AddItemIfFits(const Problem & problem, const int & selected_item_id);
 };
 
 class PackagedSolution {
@@ -42,28 +41,38 @@ class PackagedSolution {
 
 class KnapsackSolver{
     public:
-    static bool Fits(const std::vector<int> & weights, const std::vector<int> & remainingSpace);
     static std::vector<int> CalculateRemainingSpaces(const Solution & solution, const Problem & problem);
+    static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
 };
 
 class BruteForceSolver{
     public:
     struct Options{
-        enum class SearchOrder { ZERO_FIRST, ONE_FIRST, RANDOM };
+        enum class SearchOrder { ZERO_FIRST, ONE_FIRST, RANDOM, GRAY_CODE };
         SearchOrder search_order = SearchOrder::ZERO_FIRST;
 
         bool iterative = false;
+        bool late_fit = true;
     };
 
+    private:
+    static Solution Max(const Solution & a, const Solution & b);
+    static Solution SolutionFromNumber(int num, const Problem & problem);
+    static Solution DFS(const Problem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const int & depth);
+    static Solution DFS(const Problem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const bool & add, const int & depth);
+
+    public:
     static PackagedSolution Solve(const PackagedProblem & problem, const Options options);
+    static Solution Iterative(const PackagedProblem & problem, const Options::SearchOrder & search_order);
+    static Solution Recursive(const PackagedProblem & problem, const Options & options);
 };
 
 class BranchAndBoundSolver{
     private:
-    static int GreedyIgnoreConnections(const Problem & problem, const Problem::SortMode & sortMode, Solution currentSolution, std::vector<int> remainingSpace);
+    static int GreedyIgnoreConnections(const Problem & problem, const Problem::SortMode & sortMode, Solution currentSolution);
 
-    static Solution DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, std::vector<int> remainingSpace);
-    static Solution DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, std::vector<int> remainingSpace, const int & lower_bound);
+    static Solution DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId);
+    static Solution DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, const int & lower_bound);
 
     public:
     struct Options{
