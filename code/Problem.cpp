@@ -14,18 +14,9 @@ using nlohmann::json;
 using namespace knapsack_solver;
 
 
-//---------Item----------
+//--------- ITEM ----------
 
 Item::Item(const int & _value, const vector<int> & _weights, const vector<int> & _connections) : value(_value), weights(_weights), connections(_connections) { }
-
-ostream& operator<<(ostream & os, const Item & item){
-    os << "item: " << &item << ", value: " << item.value /*<< ", weights: " << item.weights.size() << ", connections: " << item.connections.size()*/ << endl;
-    os << "weights:";
-    for (int i = 0; i < item.weights.size(); ++i) os << " " << item.weights[i];
-    os << endl << "connections: ";
-    for (int i = 0; i < item.connections.size(); ++i) os << " " << item.connections[i];
-    return (os << endl);
-}
 
 bool Item::HasConnectionTo(const int & id) const{
     for (int i = 0; i < this->connections.size(); ++i){
@@ -42,10 +33,19 @@ int Item::GetWeightSum() const{
     return sum;
 }
 
+ostream& operator<<(ostream & os, const Item & item){
+    os << "item: " << &item << ", value: " << item.value /*<< ", weights: " << item.weights.size() << ", connections: " << item.connections.size()*/ << endl;
+    os << "weights:";
+    for (int i = 0; i < item.weights.size(); ++i) os << " " << item.weights[i];
+    os << endl << "connections: ";
+    for (int i = 0; i < item.connections.size(); ++i) os << " " << item.connections[i];
+    return (os << endl);
+}
 
-//---------Problem----------
 
-//---------Constructors----------
+
+
+//--------- PROBLEM ----------
 
 Problem::Problem(const string & file_name){
     std::ifstream fin (file_name);
@@ -66,20 +66,6 @@ Problem::Problem(const GenerationSettings & gs) {
         this->knapsack_sizes = gs.fixed_knapsack_sizes;
     this->GenerateInnerItems(gs.instance_size, gs.sub_knapsacks, gs.value_limit_exclusive, gs.weight_limit_exclusive, gs.connection_density);
 }
-
-Problem::Problem(const int & instance_size, const int & sub_knapsacks, const vector<int> fixed_knapsack_sizes, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density) : knapsack_sizes(fixed_knapsack_sizes) {
-    this->GenerateInnerItems(instance_size, sub_knapsacks, value_limit_exclusive, weight_limit_exclusive, connection_density);
-}
-
-Problem::Problem(const int & instance_size, const int & sub_knapsacks, const int & knapsack_size_limit_exclusive, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density) {
-    for (int i = 0; i < sub_knapsacks; ++i) {
-        this->knapsack_sizes.push_back(rand() % knapsack_size_limit_exclusive);
-    }
-    this->GenerateInnerItems(instance_size, sub_knapsacks, value_limit_exclusive, weight_limit_exclusive, connection_density);
-}
-
-
-//---------Static Methods----------
 
 void Problem::ExportJSON(const string & file_name) const{
     json data;
@@ -127,8 +113,6 @@ vector<Item> Problem::GenerateItemsVector(const int & instance_size, const int &
     return out;
 }
 
-//---------Methods----------
-
 void Problem::GenerateInnerItems(const int & instance_size, const int & sub_knapsacks, const int & value_limit_exclusive, const int & weight_limit_exclusive, const double & connection_density) {
     items.clear();
     for(int i = 0; i < instance_size; ++i){
@@ -143,40 +127,6 @@ void Problem::GenerateInnerItems(const int & instance_size, const int & sub_knap
         items.push_back(item);
     }
 }
-
-void Problem::SortItems(const SortMode & sortMode){
-    switch (sortMode)
-    {
-    case SortMode::WEIGHT_VALUE_RATIO:
-        std::sort(items.begin(), items.end(), [](Item a, Item b){
-            double aw = a.GetWeightSum();
-            double bw = b.GetWeightSum();
-            if (aw == 0 && bw == 0){
-                return a.value > b.value;
-            }
-            else if (aw == 0) return true;
-            else if (bw == 0) return false;
-            return (double)a.value / aw > (double)b.value / bw;
-        });
-        break;
-        
-    case SortMode::WEIGHT:
-        std::sort(items.begin(), items.end(), [](Item a, Item b){
-            return a.GetWeightSum() < b.GetWeightSum();
-        });
-        break;
-        
-    case SortMode::VALUE:
-        std::sort(items.begin(), items.end(), [](Item a, Item b){
-            return a.value > b.value;
-        });
-        break;
-    
-    default:
-        break;
-    }
-}
-
 
 vector<int> Problem::GetSortedItemIds(const SortMode & sortMode) const{
     struct el{
@@ -249,9 +199,6 @@ int Problem::GetValueSum() const{
     return sum;
 }
 
-
-//---------Operators----------
-
 ostream& operator<<(ostream & os, const Problem & p) {
     int s = p.knapsack_sizes.size();
     os << "problem: " << &p << ", sub knapsacks: " << s << ", knapsack sizes:";
@@ -259,5 +206,149 @@ ostream& operator<<(ostream & os, const Problem & p) {
     s = p.items.size();
     os << endl << "items amount: " << s << ", items:\n";
     for (int i = 0; i < s; ++i) os << "[" << i << "] " << p.items[i];
+    return os;
+}
+
+
+
+
+//--------- PACKAGED PROBLEM ----------
+
+PackagedProblem::PackagedProblem(const string & file_name) : known_optimum(-1) {
+    std::ifstream fin (file_name);
+    json data = json::parse(fin);
+
+    // problem
+    problem.knapsack_sizes = data["knapsack_sizes"].get<vector<int>>();
+    for (auto & j_item : data["items"]){
+        Item i(j_item["value"], j_item["weights"].get<vector<int>>(), j_item["connections"].get<vector<int>>());
+        problem.items.push_back(i);
+    }
+
+    // requirements
+    requirements.structureToFind = data["structure_to_find"];
+    requirements.weightTreatment = data["weight_treatment"];
+
+    fin.close();
+}
+
+PackagedProblem::PackagedProblem(const Problem::GenerationSettings & gs, const Problem::Requirements & rq) : problem(gs), requirements(rq), known_optimum(-1) { }
+
+void PackagedProblem::ExportJSON(const string & file_name) const{
+    json data;
+    data["knapsack_sizes"] = this->problem.knapsack_sizes;
+    for (int i = 0; i < this->problem.items.size(); ++i){
+        data["items"][i] = { {"value", this->problem.items[i].value}, {"weights", this->problem.items[i].weights}, {"connections", this->problem.items[i].connections} };
+    }
+    data["directed"] = this->problem.directed;
+    data["cycle_guarantee"] = this->problem.cycleGuarantee;
+    data["structure_to_find"] = this->requirements.structureToFind;
+    data["weight_treatment"] = this->requirements.weightTreatment;
+    data["known_optimum"] = this->known_optimum;
+    std::ofstream fout(file_name);
+    fout << data.dump(4);
+    fout.close();
+}
+
+void PackagedProblem::GeneratePackagedProblemJSON(const Problem::GenerationSettings & gs, const Problem::Requirements & rq, const string file_name){
+    PackagedProblem pp(gs, rq);
+    pp.ExportJSON(file_name);
+}
+
+void PackagedProblem::BatchGeneratePackagedProblemsJSON(const Problem::GenerationSettings & gs, const Problem::Requirements & rq, const int & amount, const string & directory_path){
+    std::filesystem::remove_all(directory_path);
+    std::filesystem::create_directories(directory_path + "/problems");
+    for (int i = 0; i < amount; ++i) {
+        GeneratePackagedProblemJSON(gs, rq, directory_path + "/problems/packaged_problem_" + std::to_string(i) + ".json");
+    }
+}
+
+ostream& operator<<(ostream & os, const PackagedProblem & pp) {
+    os << pp.problem;
+    os << "structure to find: " << pp.requirements.structureToFind << endl;
+    os << "weight treatment: " << pp.requirements.weightTreatment << endl;
+    os << "known_optimum: " << pp.known_optimum << endl;
     return (os << endl);
+}
+
+
+
+
+//--------- ENUMS ----------
+
+namespace knapsack_solver{
+
+NLOHMANN_JSON_SERIALIZE_ENUM( Problem::Requirements::StructureToFind, {
+    {Problem::Requirements::StructureToFind::CYCLE, "cycle"},
+    {Problem::Requirements::StructureToFind::PATH, "path"},
+    {Problem::Requirements::StructureToFind::TREE, "tree"},
+    {Problem::Requirements::StructureToFind::CONNECTED_GRAPH, "connected_graph"},
+    {Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS, "ignore_connections"}
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM( Problem::CycleGuarantee, {
+    {Problem::CycleGuarantee::CONTAINS_CYCLE, "contains_cycle"},
+    {Problem::CycleGuarantee::NO_CYCLE, "no_cycle"},
+    {Problem::CycleGuarantee::NO_GUARANTEES, "no_guarantees"}
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM( Problem::Requirements::WeightTreatment, {
+    {Problem::Requirements::WeightTreatment::IGNORE_ALL, "ignore_all"},
+    {Problem::Requirements::WeightTreatment::RESPECT_ALL, "respect_all"},
+    {Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY, "respect_first_only"},
+    {Problem::Requirements::WeightTreatment::SET_ALL_TO_1, "set_all_to_1"}
+})
+
+}
+
+std::ostream& operator<<(std::ostream & os, const Problem::CycleGuarantee & cg){
+    switch(cg){
+        case Problem::CycleGuarantee::CONTAINS_CYCLE:
+        os << "contains_cycle";
+        break;
+        case Problem::CycleGuarantee::NO_CYCLE:
+        os << "no_cycle";
+        break;
+        case Problem::CycleGuarantee::NO_GUARANTEES:
+        os << "no_guarantees";
+        break;
+    }
+    return os;
+}
+std::ostream& operator<<(std::ostream & os, const Problem::Requirements::StructureToFind & stf){
+    switch(stf){
+        case Problem::Requirements::StructureToFind::CYCLE:
+        os << "cycle";
+        break;
+        case Problem::Requirements::StructureToFind::PATH:
+        os << "path";
+        break;
+        case Problem::Requirements::StructureToFind::TREE:
+        os << "tree";
+        break;
+        case Problem::Requirements::StructureToFind::CONNECTED_GRAPH:
+        os << "connected_graph";
+        break;
+        case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
+        os << "ignore_connections";
+        break;
+    }
+    return os;
+}
+std::ostream& operator<<(std::ostream & os, const Problem::Requirements::WeightTreatment & wt){
+    switch(wt){
+        case Problem::Requirements::WeightTreatment::IGNORE_ALL:
+        os << "ignore_all";
+        break;
+        case Problem::Requirements::WeightTreatment::RESPECT_ALL:
+        os << "respect_all";
+        break;
+        case Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY:
+        os << "respect_first_only";
+        break;
+        case Problem::Requirements::WeightTreatment::SET_ALL_TO_1:
+        os << "set_all_to_1";
+        break;
+    }
+    return os;
 }

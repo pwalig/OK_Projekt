@@ -26,19 +26,16 @@ int main() {
     gs.weight_limit_exclusive = 10;
     gs.connection_density = 0.1;
 
-    Problem::BatchGenerateProblemsJSON(gs, 1, "../tests", "batch1", "problem");
+    Problem::Requirements rq;
 
-    Problem p("../tests/batch1/problems/problem0.json");
-    //cout << p;
+    PackagedProblem pp (gs, rq);
 
-    Requirements rq;
-    
-    cout << GreedySolver::Solve(p, rq, {Problem::SortMode::WEIGHT_VALUE_RATIO, 1}) << endl;
+    cout << GreedySolver::Solve(pp, {Problem::SortMode::WEIGHT_VALUE_RATIO, 1}) << endl;
 
     BranchAndBoundSolver::Options op;
-    cout << BranchAndBoundSolver::Solve(p, rq, op) << endl;
+    cout << BranchAndBoundSolver::Solve(pp, op) << endl;
     op.late_fit = true;
-    cout << BranchAndBoundSolver::Solve(p, rq, op) << endl;
+    cout << BranchAndBoundSolver::Solve(pp, op) << endl;
 
 
     /*cout << KnapsackSolver::BranchAndBound(p, rq) << endl;

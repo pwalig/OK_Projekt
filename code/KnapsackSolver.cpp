@@ -130,7 +130,7 @@ vector<int> KnapsackSolver::CalculateRemainingSpaces(const Solution & solution, 
 
 //---------- GREEDY SOLVER ----------
 
-PackagedSolution GreedySolver::Solve(const Problem & problem, const Requirements & requirements, const Options & options){
+PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
     std::chrono::steady_clock::time_point start, end;
     Solution s;
@@ -163,12 +163,12 @@ PackagedSolution GreedySolver::Solve(const Problem & problem, const Requirements
         break;
     }
 
-    switch (requirements.structureToFind)
+    switch (problem.requirements.structureToFind)
     {
-    case Requirements::StructureToFind::PATH:
+    case Problem::Requirements::StructureToFind::PATH:
         ps.algorithm += " path";
         break;
-    case Requirements::StructureToFind::IGNORE_CONNECTIONS:
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
         ps.algorithm += " ignore connections";
         break;
     
@@ -177,35 +177,35 @@ PackagedSolution GreedySolver::Solve(const Problem & problem, const Requirements
     }
     
     start = std::chrono::steady_clock::now();
-    s = GreedyUniversal(problem, requirements, options);
+    s = GreedyUniversal(problem, options);
     end = std::chrono::steady_clock::now();
 
     // construct packaged solution
     ps.solution = s;
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / requirements.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem);
+    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
+    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
 
     return ps;
 }
 
-Solution GreedySolver::GreedyUniversal(const Problem & problem, const Requirements & requirements, const Options & options) {
-    int isiz = problem.items.size();
+Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Options & options) {
+    int isiz = problem.problem.items.size();
     Solution globalSolution(isiz); // create empty solution
-    vector<int> remainingSpace = problem.knapsack_sizes;
-    vector<int> sortedItemIds = problem.GetSortedItemIds(options.sort_mode);
+    vector<int> remainingSpace = problem.problem.knapsack_sizes;
+    vector<int> sortedItemIds = problem.problem.GetSortedItemIds(options.sort_mode);
 
-    switch (requirements.structureToFind)
+    switch (problem.requirements.structureToFind)
     {
 
-    case Requirements::StructureToFind::PATH:
+    case Problem::Requirements::StructureToFind::PATH:
     {
         // Find best starting point
         int startItem = -1;
         for (int currentItemId : sortedItemIds) {
-            if (KnapsackSolver::Fits(problem.items[currentItemId].weights, remainingSpace)){
-                globalSolution.AddItem(problem, currentItemId, remainingSpace); // if current item fits add it to the current solution
+            if (KnapsackSolver::Fits(problem.problem.items[currentItemId].weights, remainingSpace)){
+                globalSolution.AddItem(problem.problem, currentItemId, remainingSpace); // if current item fits add it to the current solution
                 startItem = currentItemId;
                 break;
             }
@@ -219,10 +219,10 @@ Solution GreedySolver::GreedyUniversal(const Problem & problem, const Requiremen
             for (auto it = sortedItemIds.begin(); it != sortedItemIds.end(); ++it) {
                 int currentItemId = *it;
                 if (!globalSolution.selected[currentItemId] &&
-                    problem.items[startItem].HasConnectionTo(currentItemId) &&
-                    KnapsackSolver::Fits(problem.items[currentItemId].weights, remainingSpace))
+                    problem.problem.items[startItem].HasConnectionTo(currentItemId) &&
+                    KnapsackSolver::Fits(problem.problem.items[currentItemId].weights, remainingSpace))
                 {
-                    globalSolution.AddItem(problem, currentItemId, remainingSpace);
+                    globalSolution.AddItem(problem.problem, currentItemId, remainingSpace);
                     startItem = currentItemId;
                     going = true;
                     break;
@@ -232,13 +232,13 @@ Solution GreedySolver::GreedyUniversal(const Problem & problem, const Requiremen
         break;
     }
 
-    case Requirements::StructureToFind::IGNORE_CONNECTIONS:
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
     {
         for (int i = 0; i < isiz; ++i){
             int currentItemId = sortedItemIds[i];
 
             // if current item fits add it to the current solution
-            globalSolution.AddItemIfFits(problem, currentItemId, remainingSpace);
+            globalSolution.AddItemIfFits(problem.problem, currentItemId, remainingSpace);
         }
         break;
     }
@@ -298,7 +298,7 @@ Solution GreedySolver::GreedyPath(const Problem & problem, const Options & optio
 
 //---------- BRANCH AND BOUND SOLVER ----------
 
-PackagedSolution BranchAndBoundSolver::Solve(const Problem & problem, const Requirements & requirements, const Options & options){
+PackagedSolution BranchAndBoundSolver::Solve(const PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
     Solution s;
     std::chrono::steady_clock::time_point start, end;
@@ -307,13 +307,13 @@ PackagedSolution BranchAndBoundSolver::Solve(const Problem & problem, const Requ
     // solve with measured time
     if (options.late_fit){
         start = std::chrono::steady_clock::now();
-        s = BnBLateFitPath(problem);
+        s = BnBLateFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
         ps.algorithm += " late fit";
     }
     else{
         start = std::chrono::steady_clock::now();
-        s = BnBEarlyFitPath(problem);
+        s = BnBEarlyFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
         ps.algorithm += " early fit";
     }
@@ -322,8 +322,8 @@ PackagedSolution BranchAndBoundSolver::Solve(const Problem & problem, const Requ
     ps.algorithm += " path";
     ps.solution = s;
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / requirements.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem);
+    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
+    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
 
     return ps;
 }
@@ -448,16 +448,16 @@ Solution BranchAndBoundSolver::BnBLateFitPath(const Problem & problem) {
 
 //---------- FLOYD SOLVER ----------
 
-PackagedSolution FloydSolver::Solve(const Problem & problem, const Requirements & requirements){
+PackagedSolution FloydSolver::Solve(const PackagedProblem & problem){
     PackagedSolution ps;
     std::chrono::steady_clock::time_point start, end;
     Solution s;
 
-    switch (requirements.structureToFind)
+    switch (problem.requirements.structureToFind)
     {
-    case Requirements::StructureToFind::PATH:
+    case Problem::Requirements::StructureToFind::PATH:
         start = std::chrono::steady_clock::now();
-        s = Connected(problem);
+        s = Connected(problem.problem);
         end = std::chrono::steady_clock::now();
         ps.algorithm = "floyd path";
         break;
@@ -471,8 +471,8 @@ PackagedSolution FloydSolver::Solve(const Problem & problem, const Requirements 
     ps.solution = s;
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / requirements.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem);
+    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
+    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
 
     return ps;
 }

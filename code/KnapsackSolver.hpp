@@ -55,7 +55,7 @@ class BruteForceSolver{
         bool iterative = false;
     };
 
-    static PackagedSolution Solve(const Problem & problem, const Requirements & requirements, const Options options);
+    static PackagedSolution Solve(const PackagedProblem & problem, const Options options);
 };
 
 class BranchAndBoundSolver{
@@ -75,7 +75,7 @@ class BranchAndBoundSolver{
     static Solution BnBLateFitPath(const Problem & problem);
     static Solution BnBEarlyFitPath(const Problem & problem);
 
-    static PackagedSolution Solve(const Problem & problem, const Requirements & requirements, const Options & options);
+    static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
 };
 
 class GreedySolver{
@@ -85,15 +85,15 @@ class GreedySolver{
         int buffor = 1;
     };
 
-    static PackagedSolution Solve(const Problem & problem, const Requirements & requirements, const Options & options);
-    static Solution GreedyUniversal(const Problem & problem, const Requirements & requirements, const Options & options);
+    static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
+    static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
     static Solution GreedyIgnoreConnections(const Problem & problem, const Options & options);
     static Solution GreedyPath(const Problem & problem, const Options & options);
 };
 
 class FloydSolver{
     public:
-    static PackagedSolution Solve(const Problem & problem, const Requirements & requirements);
+    static PackagedSolution Solve(const PackagedProblem & problem);
     static Solution Connected(const Problem & problem);
 };
 
