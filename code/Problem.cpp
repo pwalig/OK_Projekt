@@ -261,6 +261,13 @@ void PackagedProblem::BatchGeneratePackagedProblemsJSON(const Problem::Generatio
     for (int i = 0; i < amount; ++i) {
         GeneratePackagedProblemJSON(gs, rq, directory_path + "/problems/packaged_problem_" + std::to_string(i) + ".json");
     }
+    
+    // create info file in the directory
+    json data;
+    data["amount"] = amount;
+    std::ofstream fout(directory_path + "/batch-info.json");
+    fout << data.dump(4);
+    fout.close();
 }
 
 ostream& operator<<(ostream & os, const PackagedProblem & pp) {

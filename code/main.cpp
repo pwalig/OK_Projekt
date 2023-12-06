@@ -27,7 +27,7 @@ int main() {
     gs.connection_density = 0.1;
 
     Problem::Requirements rq;
-    rq.structureToFind = Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS;
+    rq.structureToFind = Problem::Requirements::StructureToFind::PATH;
 
     PackagedProblem pp (gs, rq);
 
@@ -37,14 +37,12 @@ int main() {
 
     BruteForceSolver::Options bop;
     bop.iterative = true;
+    pp.requirements.structureToFind = Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS;
     bop.search_order = BruteForceSolver::Options::SearchOrder::ZERO_FIRST;
     cout << BruteForceSolver::Solve(pp, bop) << endl;
     bop.search_order = BruteForceSolver::Options::SearchOrder::ONE_FIRST;
     cout << BruteForceSolver::Solve(pp, bop) << endl;
-    bop.iterative = false;
-    bop.late_fit = true;
-    cout << BruteForceSolver::Solve(pp, bop) << endl;
-    bop.late_fit = false;
+    bop.search_order = BruteForceSolver::Options::SearchOrder::UNCONSTRAINED;
     cout << BruteForceSolver::Solve(pp, bop) << endl;
 
     return 0;

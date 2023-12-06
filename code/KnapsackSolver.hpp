@@ -8,13 +8,17 @@
 
 namespace knapsack_solver {
 
+
+
 class Solution {
+    bool IsPathDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & length) const;
+    bool IsCycleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start, const int & length) const;
+
     public:
     int max_value;
     std::vector<bool> selected;
     std::vector<int> remainingSpace;
     bool valid;
-
 
     Solution();
     Solution(const int & InstanceSize, const std::vector<int> & available_space);
@@ -26,7 +30,35 @@ class Solution {
     
     /// @returns true if addition was succesfull, false if item did not fit or was already in solution
     bool AddItemIfFits(const Problem & problem, const int & selected_item_id);
+
+    bool IsPath(const Problem & problem) const;
+    bool IsCycle(const Problem & problem) const;
+    bool IsTree(const Problem & problem) const;
+    bool IsConnected(const Problem & problem) const;
+    bool IsCyclePossible(const Problem & problem) const;
 };
+
+
+
+class Validation{
+    public:
+    struct ValidationStatus{
+        bool undergone = false;
+        bool valid = true;
+        bool value = true;
+        bool remaining_space = true;
+        bool fit = true;
+        bool structure = true;
+        bool self_valid = true;
+        //bool quality;
+     };
+    static std::vector<int> CalculateRemainingSpaces(const Solution & solution, const Problem & problem);
+    static int CalculateMaxValue(const Solution & solution, const Problem & problem);
+    static ValidationStatus Validate(const Solution & solution, const PackagedProblem & problem);
+    static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
+};
+
+
 
 class PackagedSolution {
     public:
@@ -34,24 +66,20 @@ class PackagedSolution {
         Solution solution;
         double to_optimum_ratio;
         double solve_time;
-        std::vector<int> remainingSpaces;
+        Validation::ValidationStatus validation_status;
     
     void ExportJSON(const std::string file_name);
 };
 
-class KnapsackSolver{
-    public:
-    static std::vector<int> CalculateRemainingSpaces(const Solution & solution, const Problem & problem);
-    static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
-};
+
 
 class BruteForceSolver{
     public:
     struct Options{
-        enum class SearchOrder { ZERO_FIRST, ONE_FIRST, RANDOM, GRAY_CODE };
-        SearchOrder search_order = SearchOrder::ZERO_FIRST;
+        enum class SearchOrder { ZERO_FIRST, ONE_FIRST, RANDOM, GRAY_CODE, UNCONSTRAINED };
+        SearchOrder search_order = SearchOrder::UNCONSTRAINED;
 
-        bool iterative = false;
+        bool iterative = true;
         bool late_fit = true;
     };
 
@@ -66,6 +94,8 @@ class BruteForceSolver{
     static Solution Iterative(const PackagedProblem & problem, const Options::SearchOrder & search_order);
     static Solution Recursive(const PackagedProblem & problem, const Options & options);
 };
+
+
 
 class BranchAndBoundSolver{
     private:
@@ -87,6 +117,8 @@ class BranchAndBoundSolver{
     static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
 };
 
+
+
 class GreedySolver{
     public:
     struct Options{
@@ -100,6 +132,8 @@ class GreedySolver{
     static Solution GreedyPath(const Problem & problem, const Options & options);
 };
 
+
+
 class FloydSolver{
     public:
     static PackagedSolution Solve(const PackagedProblem & problem);
@@ -107,7 +141,10 @@ class FloydSolver{
 };
 
 
+
 } // namespace knapsack_solver
+
+
 
 std::ostream& operator<<(std::ostream& os, const knapsack_solver::Solution& s);
 

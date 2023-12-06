@@ -22,11 +22,16 @@ Solution::Solution() : max_value(0), valid(true) {}
 Solution::Solution(const int & InstanceSize, const vector<int> & available_space) : max_value(0), valid(true), selected(InstanceSize, false), remainingSpace(available_space) { }
 
 ostream& operator<<(ostream& os, const Solution& s){
-    os << "max value: " << s.max_value << "\nselected: ";
+    os << "max value: " << s.max_value << "\nselected:";
     int instance_size = s.selected.size();
     for (int i = 0; i < instance_size; ++i){
-        os << (s.selected[i] ? 1 : 0) << " ";
+        os << " " << s.selected[i];
     }
+    os << "\nremaining spaces:";
+    for (int i = 0; i < s.remainingSpace.size(); ++i){
+        os << " " << s.remainingSpace[i];
+    }
+    os << "\nvalid: " << s.valid;
     return (os << endl);
 }
 
@@ -88,6 +93,88 @@ bool Solution::AddItemIfFits(const Problem & problem, const int & selected_item_
     return true;
 }
 
+bool Solution::IsPathDFS(const Problem & problem, vector<int> & visited, const int & current, const int & length) const{
+    for (int next : problem.items[current].connections) {
+        if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
+            if (visited.size() + 1 == length) return true; // path found
+            if (visited.size() + 1 > length) return false; // path would have to be to long
+            visited.push_back(next);
+            if (IsPathDFS(problem, visited, next, length)) return true; // path found later
+            visited.pop_back();
+        }
+    }
+    return false; // path not found
+}
+bool Solution::IsPath(const Problem & problem) const{
+    if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
+
+    // calculate whats the length of the path
+    int length = 0;
+    for (int i = 0; i < selected.size(); ++i)
+        if (selected[i]) ++length;
+    
+    if (length <= 1) return true;
+    
+    // check from each starting point
+    vector<int> visited;
+    for (int i = 0; i < selected.size(); ++i) {
+        if (selected[i]){
+            visited.push_back(i);
+            if (IsPathDFS(problem, visited, i, length)) return true; // path found somewhere
+            visited.pop_back();
+        }
+    }
+    return false;
+}
+
+bool Solution::IsCycleDFS(const Problem & problem, vector<int> & visited, const int & current, const int & start, const int & length) const{
+    for (int next : problem.items[current].connections) {
+        if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
+            if (visited.size() + 1 == length && problem.items[next].HasConnectionTo(start)) return true; // cycle found
+            if (visited.size() + 1 > length) return false; // cycle would have to be to long
+            visited.push_back(next);
+            if (IsCycleDFS(problem, visited, next, start, length)) return true; // cycle found later
+            visited.pop_back();
+        }
+    }
+    return false; // cycle not found
+}
+bool Solution::IsCycle(const Problem & problem) const{
+    if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
+
+    // calculate whats the length of the cycle
+    int length = 0;
+    for (int i = 0; i < selected.size(); ++i)
+        if (selected[i]) ++length;
+    
+    if (length == 0) return true;
+    
+    // check from each starting point
+    vector<int> visited;
+    for (int i = 0; i < selected.size(); ++i) {
+        if (selected[i]){
+            if (length == 1) return problem.items[i].HasConnectionTo(i);
+            visited.push_back(i);
+            if (IsCycleDFS(problem, visited, i, i, length)) return true; // cycle found somewhere
+            visited.pop_back();
+        }
+    }
+    return false;
+}
+
+bool Solution::IsTree(const Problem & problem) const{
+    throw std::logic_error("not implemented yet");
+    return false;
+}
+bool Solution::IsConnected(const Problem & problem) const{
+    throw std::logic_error("not implemented yet");
+    return false;
+}
+bool Solution::IsCyclePossible(const Problem & problem) const{
+    throw std::logic_error("not implemented yet");
+    return false;
+}
+
 
 
 
@@ -95,36 +182,63 @@ bool Solution::AddItemIfFits(const Problem & problem, const int & selected_item_
 
 void PackagedSolution::ExportJSON(const std::string file_name){
     json data;
+
+    // packaged soution
     data["algorithm"] = algorithm;
     to_optimum_ratio >= 0 ? data["to_optimum_ratio"] = to_optimum_ratio : data["to_optimum_ratio"] = "optimum_unnown";
     data["solve_time"] = solve_time;
-    data["remaining_spaces"] = remainingSpaces;
+    data["remaining_spaces"] = solution.remainingSpace;
+
+    // solution
     data["solution"]["max_value"] = solution.max_value;
     for (int i = 0; i < solution.selected.size(); ++i){
         data["solution"]["selected"][i] = solution.selected[i];
     }
+
+    // validation status
+    if (validation_status.undergone) {
+        data["validation_status"]["valid"] = validation_status.valid;
+        data["validation_status"]["fit"] = validation_status.fit;
+        data["validation_status"]["remaining_space"] = validation_status.remaining_space;
+        data["validation_status"]["self_valid"] = validation_status.self_valid;
+        data["validation_status"]["structure"] = validation_status.structure;
+        data["validation_status"]["value"] = validation_status.value;
+    }
+    else data["validation_status"] = "did_not_undergo_validation";
+
     std::ofstream fout(file_name);
     fout << data.dump(4);
     fout.close();
 }
 
 ostream& operator<<(ostream& os, const PackagedSolution& ps){
+    // packaged solution
     os << "solved with: " << ps.algorithm << endl << ps.solution;
     os << "to_optimum_ratio: ";
     ps.to_optimum_ratio >= 0 ? os << ps.to_optimum_ratio : os << "optimum unknown";
-    os << "\nsolve time: " << ps.solve_time << " s\nremaining spaces:";
-    for (int i = 0; i < ps.remainingSpaces.size(); ++i){
-        os << " " << ps.remainingSpaces[i];
+    os << "\nsolve time: " << ps.solve_time << endl;
+
+    // validation status
+    if (ps.validation_status.undergone) {
+        os << "validaton status:\n";
+        os << "\tvalid: " << ps.validation_status.valid << endl;
+        os << "\tvalue: " << ps.validation_status.value << endl;
+        os << "\tfit: " << ps.validation_status.fit << endl;
+        os << "\tremaining_space: " << ps.validation_status.remaining_space << endl;
+        os << "\tstructure: " << ps.validation_status.structure << endl;
+        os << "\tself_valid: " << ps.validation_status.self_valid << endl;
     }
+    else os << "did_not_undergo_validation";
+
     return (os << endl);
 }
 
 
 
 
-//---------- KNAPSACK SOLVER ----------
+//---------- VALIDATION ----------
 
-vector<int> KnapsackSolver::CalculateRemainingSpaces(const Solution & solution, const Problem & problem){
+vector<int> Validation::CalculateRemainingSpaces(const Solution & solution, const Problem & problem){
     vector<int> remainigSpaces = problem.knapsack_sizes;
     for (int i = 0; i < solution.selected.size(); ++i){
         if (solution.selected[i]) {
@@ -136,8 +250,63 @@ vector<int> KnapsackSolver::CalculateRemainingSpaces(const Solution & solution, 
     return remainigSpaces;
 }
 
-int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProblem & problem){
-    return 0;
+int Validation::CalculateMaxValue(const Solution & solution, const Problem & problem){
+    if (solution.selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not mathch");
+    int sum = 0;
+    for (int i = 0; i < solution.selected.size(); ++i){
+        if (solution.selected[i]) sum += problem.items[i].value;
+    }
+    return sum;
+}
+
+Validation::ValidationStatus Validation::Validate(const Solution & solution, const PackagedProblem & problem){
+    ValidationStatus vs;
+    if (solution.max_value != CalculateMaxValue(solution, problem.problem)) vs.value = false; // solution calculated its value wrong
+    vector<int> calculatedRemainingSpace = CalculateRemainingSpaces(solution, problem.problem);
+    if (solution.remainingSpace != calculatedRemainingSpace) vs.remaining_space = false; // solution calculated its remaining space wrong
+    for (int weight : calculatedRemainingSpace) if (weight < 0) vs.fit = false; // items dont fit
+
+    switch (problem.requirements.structureToFind)
+    {
+    case Problem::Requirements::StructureToFind::PATH:
+        vs.structure = solution.IsPath(problem.problem);
+        break;
+        
+    case Problem::Requirements::StructureToFind::CYCLE:
+        vs.structure = solution.IsCycle(problem.problem);
+        break;
+    
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
+        vs.structure = true;
+        break;
+
+    default:
+        break;
+    }
+
+    vs.valid = vs.value && vs.remaining_space && vs.fit && vs.structure; // set main valid
+    if (solution.valid != vs.valid) {vs.self_valid = false; vs.valid = false;} // solution either: invalided itself for no reason, or: thought it was valid even though it was not
+
+    vs.undergone = true;
+    return vs;
+}
+
+int Validation::GoalFunction(const Solution & solution, const PackagedProblem & problem){
+
+    switch (problem.requirements.structureToFind)
+    {
+    case Problem::Requirements::StructureToFind::PATH:
+        if (!solution.IsPath(problem.problem)) return INT_MIN;
+        break;
+        
+    case Problem::Requirements::StructureToFind::CYCLE:
+        if (!solution.IsCycle(problem.problem)) return INT_MIN;
+        break;
+
+    default:
+        break;
+    }
+    return CalculateMaxValue(solution, problem.problem);
 }
 
 
@@ -151,8 +320,8 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
     
     PackagedSolution ps;
     std::chrono::steady_clock::time_point start, end;
-    Solution s;
 
+    // fil algorithm info / details
     ps.algorithm = "brute force; ignore connections; ";
     if (options.iterative) {
         ps.algorithm += "iterative; ";
@@ -162,16 +331,17 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
         case BruteForceSolver::Options::SearchOrder::ZERO_FIRST:
             ps.algorithm += "zero first";
             break;
+            
+        case BruteForceSolver::Options::SearchOrder::UNCONSTRAINED:
+            ps.algorithm += "unconstrained";
+            break;
 
         case BruteForceSolver::Options::SearchOrder::ONE_FIRST:
             ps.algorithm += "one first";
             break;
 
-        case BruteForceSolver::Options::SearchOrder::RANDOM:
-            ps.algorithm += "random order";
-            break;
-
         default:
+            throw std::logic_error("not implemented yet");
             break;
         }
     }
@@ -180,23 +350,23 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
         ps.algorithm += options.late_fit ? "late_fit; " : "early_fit; ";
     }
     
+    // run with time measure
     if (options.iterative) {
         start = std::chrono::steady_clock::now();
-        s = Iterative(problem, options.search_order);
+        ps.solution = Iterative(problem, options.search_order);
         end = std::chrono::steady_clock::now();
     }
     else {
         start = std::chrono::steady_clock::now();
-        s = Recursive(problem, options);
+        ps.solution = Recursive(problem, options);
         end = std::chrono::steady_clock::now();
     }
-
-    // construct packaged solution
-    ps.solution = s;
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
+    ps.to_optimum_ratio = 1.0;
+
+    // validate
+    ps.validation_status = Validation::Validate(ps.solution, problem);
 
     return ps;
 }
@@ -228,24 +398,26 @@ Solution BruteForceSolver::Iterative(const PackagedProblem & problem, const Opti
     int isiz = problem.problem.items.size();
     Solution global_solution(isiz, problem.problem.knapsack_sizes);
 
+    int n = pow(2, isiz);
     switch (search_order)
     {
+    case Options::SearchOrder::UNCONSTRAINED:
     case Options::SearchOrder::ZERO_FIRST:
-        for (int i = 0; i < pow(2, isiz); ++i) {
+        for (int i = 0; i < n; ++i) {
             Solution temp_solution = SolutionFromNumber(i, problem.problem);
             if (temp_solution.valid && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
         }
         break;
 
     case Options::SearchOrder::ONE_FIRST:
-        for (int i = pow(2, isiz) - 1; i >= 0; --i) {
+        for (int i = n - 1; i >= 0; --i) {
             Solution temp_solution = SolutionFromNumber(i, problem.problem);
             if (temp_solution.valid && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
         }
         break;
 
-    case Options::SearchOrder::RANDOM:
-        throw std::logic_error("Random brute force order not implemented yet");
+    default:
+        throw std::logic_error("not implemented yet");
         break;
     }
 
@@ -272,6 +444,9 @@ Solution BruteForceSolver::DFS(const Problem & problem, Solution sol0, const Opt
 }
 
 Solution BruteForceSolver::Recursive(const PackagedProblem & problem, const Options & options){
+    if (options.search_order != BruteForceSolver::Options::SearchOrder::UNCONSTRAINED)
+        throw std::invalid_argument("recursive does not support searc order"); //it could be supported, but it slows algorithm down
+    
     int isiz = problem.problem.items.size();
     Solution sol0(isiz, problem.problem.knapsack_sizes);
     
@@ -294,9 +469,8 @@ Solution BruteForceSolver::Recursive(const PackagedProblem & problem, const Opti
 
 PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
-    std::chrono::steady_clock::time_point start, end;
-    Solution s;
 
+    // fill algorithm info / details
     ps.algorithm = "";
 
     switch (options.sort_mode)
@@ -338,16 +512,18 @@ PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Opti
         break;
     }
     
+    // run with time measure
+    std::chrono::steady_clock::time_point start, end;
     start = std::chrono::steady_clock::now();
-    s = GreedyUniversal(problem, options);
+    ps.solution = GreedyUniversal(problem, options);
     end = std::chrono::steady_clock::now();
-
-    // construct packaged solution
-    ps.solution = s;
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
+
+    ps.to_optimum_ratio = ps.solution.max_value / problem.known_optimum;
+
+    // validate
+    ps.validation_status = Validation::Validate(ps.solution, problem);
 
     return ps;
 }
@@ -482,7 +658,6 @@ PackagedSolution BranchAndBoundSolver::Solve(const PackagedProblem & problem, co
     ps.solution = s;
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
     ps.to_optimum_ratio = s.max_value / problem.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
 
     return ps;
 }
@@ -627,7 +802,6 @@ PackagedSolution FloydSolver::Solve(const PackagedProblem & problem){
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
     ps.to_optimum_ratio = s.max_value / problem.known_optimum;
-    ps.remainingSpaces = KnapsackSolver::CalculateRemainingSpaces(s, problem.problem);
 
     return ps;
 }
