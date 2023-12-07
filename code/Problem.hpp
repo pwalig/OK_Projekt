@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iostream> // std::ostream, std::ifstream
+#include <iostream> // std::ostream
 #include <vector>
 #include <string>
 

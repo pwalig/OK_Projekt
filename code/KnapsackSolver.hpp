@@ -1,8 +1,14 @@
 #pragma once
 
-#include <iostream> // std::ostream, std::ifstream
+#include <iostream> // std::ostream
+#include <fstream> // std::ifstream
 #include <vector>
 #include <string>
+
+// Batch Solve requires these three:
+#include <filesystem> // std::filesystem::create_directory, std::filesystem::remove_all
+#include "json.hpp"
+#include "FileNameDefines.hpp"
 
 #include "Problem.hpp"
 
@@ -50,7 +56,7 @@ class Validation{
         bool fit = true;
         bool structure = true;
         bool self_valid = true;
-        //bool quality;
+        bool quality = true; // needs to be filled outside of validation method - by the solve method
      };
     static std::vector<int> CalculateRemainingSpaces(const Solution & solution, const Problem & problem);
     static int CalculateMaxValue(const Solution & solution, const Problem & problem);
@@ -81,6 +87,8 @@ class BruteForceSolver{
 
         bool iterative = true;
         bool late_fit = true;
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
     };
 
     private:
@@ -91,6 +99,8 @@ class BruteForceSolver{
 
     public:
     static PackagedSolution Solve(const PackagedProblem & problem, const Options options);
+    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
+    
     static Solution Iterative(const PackagedProblem & problem, const Options::SearchOrder & search_order);
     static Solution Recursive(const PackagedProblem & problem, const Options & options);
 };
@@ -109,12 +119,15 @@ class BranchAndBoundSolver{
         enum class BoundingFunction { NONE, CONTINOUS, ACYCLIC, BASE_DYNAMIC };
         BoundingFunction bounding_function = BoundingFunction::NONE;
         bool late_fit = false;
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
     };
 
     static Solution BnBLateFitPath(const Problem & problem);
     static Solution BnBEarlyFitPath(const Problem & problem);
 
     static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
 };
 
 
@@ -124,9 +137,13 @@ class GreedySolver{
     struct Options{
         Problem::SortMode sort_mode = Problem::SortMode::WEIGHT_VALUE_RATIO;
         int buffor = 1;
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
     };
 
     static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
+
     static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
     static Solution GreedyIgnoreConnections(const Problem & problem, const Options & options);
     static Solution GreedyPath(const Problem & problem, const Options & options);
@@ -139,6 +156,34 @@ class FloydSolver{
     static PackagedSolution Solve(const PackagedProblem & problem);
     static Solution Connected(const Problem & problem);
 };
+
+
+
+template <typename T>
+inline PackagedSolution Solve(const PackagedProblem & problem, const typename T::Options & options){
+    return T::Solve(problem, options);
+}
+
+
+template <typename T>
+inline void BatchSolve(const std::string & directory_path, const typename T::Options & options) {
+    // get the amount of problems to be solved
+    std::ifstream fin (directory_path + FND_BATCH_INFO_FILE);
+    nlohmann::json data = nlohmann::json::parse(fin);
+    int amount = data["amount"];
+    fin.close();
+
+    // create solutions
+    for (int i = 0; i < amount; ++i){
+        PackagedProblem problem(directory_path + FND_PROBLEMS_FOLDER + FND_PROBLEM_FILE + std::to_string(i) + ".json");
+        PackagedSolution ps = T::Solve(problem, options);
+        if (i == 0) {
+            std::filesystem::remove_all(directory_path + "/" + ps.algorithm);
+            std::filesystem::create_directories(directory_path + "/" + ps.algorithm);
+        }
+        ps.ExportJSON(directory_path + "/" + ps.algorithm + FND_SOLUTION_FILE + std::to_string(i) + ".json");
+    }
+}
 
 
 

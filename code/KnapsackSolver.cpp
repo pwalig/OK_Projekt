@@ -1,9 +1,19 @@
 #include "KnapsackSolver.hpp"
-#include "json.hpp"
+//"KnapsackSolver.hpp" already includes:
+    //#include <iostream>  // std::ostream
+    //#include <fstream> // std::ifstream
+    //#include <vector>
+    //#include <string>
+
+    //Batch Solve requires these three:
+    //#include <filesystem> // std::filesystem::create_directory
+    //#include "json.hpp"
+    //#include "FileNameDefines.hpp"
+
+    //#include "Problem.hpp"
 
 #include <chrono>
-#include <fstream> // std::ifstream, std::ofstream
-#include <cmath> // std::max
+#include <fstream> // std::ofstream
 #include <stdexcept> // throw error types
 
 using namespace knapsack_solver;
@@ -322,14 +332,14 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
     std::chrono::steady_clock::time_point start, end;
 
     // fil algorithm info / details
-    ps.algorithm = "brute force; ignore connections; ";
+    ps.algorithm = "brute-force_ignore-connections_";
     if (options.iterative) {
-        ps.algorithm += "iterative; ";
+        ps.algorithm += "iterative_";
 
         switch (options.search_order)
         {
         case BruteForceSolver::Options::SearchOrder::ZERO_FIRST:
-            ps.algorithm += "zero first";
+            ps.algorithm += "zero-first";
             break;
             
         case BruteForceSolver::Options::SearchOrder::UNCONSTRAINED:
@@ -337,7 +347,7 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
             break;
 
         case BruteForceSolver::Options::SearchOrder::ONE_FIRST:
-            ps.algorithm += "one first";
+            ps.algorithm += "one-first";
             break;
 
         default:
@@ -346,8 +356,8 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
         }
     }
     else {
-        ps.algorithm += "recursive; ";
-        ps.algorithm += options.late_fit ? "late_fit; " : "early_fit; ";
+        ps.algorithm += "recursive_";
+        ps.algorithm += options.late_fit ? "late-fit" : "early-fit";
     }
     
     // run with time measure
@@ -476,23 +486,23 @@ PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Opti
     switch (options.sort_mode)
     {
     case Problem::SortMode::WEIGHT_VALUE_RATIO:
-        ps.algorithm += "greedy sort by value/weight";
+        ps.algorithm += "greedy-sort-by-value-weight";
         break;
         
     case Problem::SortMode::VALUE:
-        ps.algorithm += "greedy sort by value";
+        ps.algorithm += "greedy-sort-by-value";
         break;
         
     case Problem::SortMode::WEIGHT:
-        ps.algorithm += "greedy sort by weight";
+        ps.algorithm += "greedy-sort-by-weight";
         break;
 
     case Problem::SortMode::RANDOM:
-        ps.algorithm += "random fit";
+        ps.algorithm += "random-fit";
         break;
     
     case Problem::SortMode::DONT_SORT:
-        ps.algorithm += "first fit";
+        ps.algorithm += "first-fit";
         break;
 
     default:
@@ -502,10 +512,10 @@ PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Opti
     switch (problem.requirements.structureToFind)
     {
     case Problem::Requirements::StructureToFind::PATH:
-        ps.algorithm += " path";
+        ps.algorithm += "_path";
         break;
     case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
-        ps.algorithm += " ignore connections";
+        ps.algorithm += "_ignore-connections";
         break;
     
     default:
@@ -637,24 +647,24 @@ PackagedSolution BranchAndBoundSolver::Solve(const PackagedProblem & problem, co
     PackagedSolution ps;
     Solution s;
     std::chrono::steady_clock::time_point start, end;
-    ps.algorithm = "branch and bound";
+    ps.algorithm = "branch-and-bound";
 
     // solve with measured time
     if (options.late_fit){
         start = std::chrono::steady_clock::now();
         s = BnBLateFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
-        ps.algorithm += " late fit";
+        ps.algorithm += "_late-fit";
     }
     else{
         start = std::chrono::steady_clock::now();
         s = BnBEarlyFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
-        ps.algorithm += " early fit";
+        ps.algorithm += "_early-fit";
     }
     const std::chrono::duration<double> elapsed_seconds{end - start};
 
-    ps.algorithm += " path";
+    ps.algorithm += "_path";
     ps.solution = s;
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
     ps.to_optimum_ratio = 1.0;

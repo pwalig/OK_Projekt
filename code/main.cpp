@@ -1,5 +1,3 @@
-#include <iostream> // cout, endl
-
 #include <cstdlib> // std::srand()
 #include <ctime> // std::time()
 
@@ -7,9 +5,7 @@
 
 #define KSS_DEVELOPMENT
 
-using namespace knapsack_solver;
-using std::cout;
-using std::endl;
+using namespace knapsack_solver; // knapsack_solver::CommandInterpreter
 
 int main(int argc, char * argv[]) {
     std::srand(std::time(0) * 1000);

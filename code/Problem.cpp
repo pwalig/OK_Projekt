@@ -1,10 +1,12 @@
 #include "Problem.hpp"
-#include "UtilityFunctions.hpp"
-#include "json.hpp"
 
 #include <algorithm> // std::sort, std::find
 #include <fstream> // std::ifstream, std::ofstream
-#include <filesystem> // std::filesystem::create_directory
+#include <filesystem> // std::filesystem::create_directory, std::filesystem::remove_all
+
+#include "UtilityFunctions.hpp"
+#include "json.hpp"
+#include "FileNameDefines.hpp"
 
 using std::string;
 using std::vector;
@@ -59,9 +61,11 @@ Problem::Problem(const string & file_name){
 }
 
 Problem::Problem(const GenerationSettings & gs) {
-    if (gs.randomize_knapsack_sizes)
-        for (int i = 0; i < gs.sub_knapsacks; ++i)
-            this->knapsack_sizes.push_back(rand() % gs.knapsack_size_limit_exclusive);
+    if (gs.randomize_knapsack_sizes){
+        for (int i = 0; i < gs.sub_knapsacks; ++i){
+            this->knapsack_sizes.push_back(std::rand() % gs.knapsack_size_limit_exclusive);
+        }
+    }
     else
         this->knapsack_sizes = gs.fixed_knapsack_sizes;
     this->GenerateInnerItems(gs.instance_size, gs.sub_knapsacks, gs.value_limit_exclusive, gs.weight_limit_exclusive, gs.connection_density);
@@ -257,15 +261,15 @@ void PackagedProblem::GeneratePackagedProblemJSON(const Problem::GenerationSetti
 
 void PackagedProblem::BatchGeneratePackagedProblemsJSON(const Problem::GenerationSettings & gs, const Problem::Requirements & rq, const int & amount, const string & directory_path){
     std::filesystem::remove_all(directory_path);
-    std::filesystem::create_directories(directory_path + "/problems");
+    std::filesystem::create_directories(directory_path + FND_PROBLEMS_FOLDER);
     for (int i = 0; i < amount; ++i) {
-        GeneratePackagedProblemJSON(gs, rq, directory_path + "/problems/packaged_problem_" + std::to_string(i) + ".json");
+        GeneratePackagedProblemJSON(gs, rq, directory_path + FND_PROBLEMS_FOLDER + FND_PROBLEM_FILE + std::to_string(i) + ".json");
     }
     
     // create info file in the directory
     json data;
     data["amount"] = amount;
-    std::ofstream fout(directory_path + "/batch-info.json");
+    std::ofstream fout(directory_path + FND_BATCH_INFO_FILE);
     fout << data.dump(4);
     fout.close();
 }
