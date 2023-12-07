@@ -657,7 +657,9 @@ PackagedSolution BranchAndBoundSolver::Solve(const PackagedProblem & problem, co
     ps.algorithm += " path";
     ps.solution = s;
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
+    ps.to_optimum_ratio = 1.0;
+
+    ps.validation_status = Validation::Validate(s, problem);
 
     return ps;
 }
@@ -681,7 +683,7 @@ int BranchAndBoundSolver::GreedyIgnoreConnections(const Problem & problem, const
 
 //---------- Early Fit ----------
 
-Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, const int & lower_bound) {
+Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, int lower_bound) {
 
 #ifdef DEBUG_BNB
     cout << "check for " << currentItemId << ", remaining weight: "<< remainingSpace[0] << endl;
@@ -699,7 +701,10 @@ Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution
             tempSolution.AddItem(problem, nextItemId);
             if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::WEIGHT_VALUE_RATIO, tempSolution, remainingSpace) > lower_bound*/) {
                 tempSolution = DFSEarlyFitPath(problem, tempSolution, nextItemId, lower_bound);
-                if (tempSolution.max_value > globalSolution.max_value) globalSolution = tempSolution;
+                if (tempSolution.max_value > globalSolution.max_value) {
+                    globalSolution = tempSolution;
+                    lower_bound = tempSolution.max_value;
+                }
             }
         }
     }
@@ -737,7 +742,7 @@ Solution BranchAndBoundSolver::DFSLateFitPath(const Problem & problem, Solution 
     if (!currentSolution.AddItemIfFits(problem, currentItemId)) // if current item fits add it to the current solution
         return currentSolution; // if does not fit return what have we managed to fit so far
 
-#ifdef _DEBUG_MODE_
+#ifdef DEBUG_BNB_LF
     cout << "check for " << currentItemId << ", remaining weight: "<< currentSolution.remainingSpace[0] << endl;
 #endif
 
@@ -752,7 +757,7 @@ Solution BranchAndBoundSolver::DFSLateFitPath(const Problem & problem, Solution 
         if (tempSolution.max_value > globalSolution.max_value) globalSolution = tempSolution;
     }
 
-#ifdef _DEBUG_MODE_
+#ifdef DEBUG_BNB_LF
     cout << "exit with: " << globalSolution.max_value << endl;
 #endif
     return globalSolution; // return the best solution from all paths starting from currentItemId

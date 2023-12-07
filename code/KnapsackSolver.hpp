@@ -102,7 +102,7 @@ class BranchAndBoundSolver{
     static int GreedyIgnoreConnections(const Problem & problem, const Problem::SortMode & sortMode, Solution currentSolution);
 
     static Solution DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId);
-    static Solution DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, const int & lower_bound);
+    static Solution DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, int lower_bound);
 
     public:
     struct Options{

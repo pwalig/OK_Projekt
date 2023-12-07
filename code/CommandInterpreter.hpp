@@ -9,7 +9,7 @@ namespace knapsack_solver{
 
 
 class CommandInterpreter{
-    enum class Command { RUN_TASKS, TEST_PRINT, SOLVE, GENERATE_PROBLEM };
+    enum class Command { RUN_TASKS, PRINT, SOLVE, GENERATE_PROBLEM };
     static std::map<std::string, Command> command_map;
     public:
     static void InterpretCommand(const int & argc, char const * const * const argv);
