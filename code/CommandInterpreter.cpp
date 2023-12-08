@@ -4,13 +4,13 @@
 //#include <vector>
 //#include <map>
 //#include <functional> // std::function
+//#include "KnapsackSolver.hpp"
 
 #include <fstream> // std::ifstream in RunTasks()
 #include <iostream> // std::cout, std::endl
 #include <stdexcept> // throw error types
 
 #include "json.hpp" // required by RunTasks()
-#include "KnapsackSolver.hpp"
 
 using std::endl;
 using std::cout;
@@ -45,6 +45,12 @@ void CommandInterpreter::Consume(std::vector<std::string> & args, const std::str
         it = args.erase(it);
         lambda(to_modify);
     }
+}
+
+std::string CommandInterpreter::Consume(std::vector<std::string> & args, const int & arg_id){
+    string arg = args[arg_id];
+    args.erase(args.begin() + arg_id);
+    return arg;
 }
 
 
@@ -103,6 +109,21 @@ BranchAndBoundSolver::Options::Options(std::vector<std::string> & args) : Option
 
 // ---------- COMMAND INTERPRETING ----------
 
+template <typename T>
+void CommandInterpreter::BatchSolveFromArgs(std::vector<std::string> & args){
+    typename T::Options op(args);
+    if (args.size() > 1) throw std::invalid_argument(args[1] + " is not a recognised argument for command " + "batch-solve");
+    BatchSolve<T>(Consume(args, 0), op);
+}
+
+template <typename T>
+PackagedSolution CommandInterpreter::SolveFromArgs(std::vector<std::string> & args){
+    typename T::Options op(args);
+    if (args.size() > 1) throw std::invalid_argument(args[1] + " is not a recognised argument for command " + "solve");
+    PackagedProblem pp(Consume(args, 0));
+    return Solve<T>(pp, op);
+}
+
 void CommandInterpreter::InterpretCommand(const int & argc, char const * const * const argv){
     vector<string> args;
     for (int i = 2; i < argc; ++i){
@@ -122,69 +143,48 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
     switch (command_map[command])
     {
     case Command::RUN_TASKS:{
-        RunTasks(args[0]);
-        args.erase(args.begin());
+        if (args.size() > 1) throw std::invalid_argument("run tasks takes only one argument, provided: " + args.size());
+        RunTasks(Consume(args, 0));
         break;
     }
 
     case Command::SOLVE:{
-        PackagedProblem pp(args[0]);
-        args.erase(args.begin());
-        PackagedSolution ps;
-
-        if (args[0] == "greedy"){
-            GreedySolver::Options op(args);
-            ps = GreedySolver::Solve(pp, op);
-        }
-        else if (args[0] == "brute-force"){
-            BruteForceSolver::Options op(args);
-            ps = BruteForceSolver::Solve(pp, op);
-        }
-        else if (args[0] == "branch-and-bound"){
-            BranchAndBoundSolver::Options op(args);
-            ps = BranchAndBoundSolver::Solve(pp, op);
-        }
-        else 
-            throw std::invalid_argument(args[0] + " is not a recognised algorithm");
-        args.erase(args.begin());
-
         // output file
-        Consume<PackagedSolution>(args, "-o", [](const string & arg, PackagedSolution & el){
-            el.ExportJSON(arg);
-        }, ps);
+        string export_file = "";
+        Consume<string>(args, "-o", [](const string & arg, string & el){
+            el = arg;
+        }, export_file);
         
         // print on console
-        Consume<PackagedSolution>(args, "-p", [](PackagedSolution & el){
-            cout << el;
-        }, ps);
+        bool print = false;
+        Consume<bool>(args, "-p", [](bool & el){
+            el = true;
+        }, print);
+
+        PackagedSolution ps;
+        string algorithm = Consume(args, 1);
+        if (algorithm == "greedy") ps = SolveFromArgs<GreedySolver>(args);
+        else if (algorithm == "brute-force") ps = SolveFromArgs<BruteForceSolver>(args);
+        else if (algorithm == "branch-and-bound") ps = SolveFromArgs<BranchAndBoundSolver>(args);
+        else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
+            
+        if (print) cout << ps;
+        if (export_file != "") ps.ExportJSON(export_file);
 
         break;
     }
     case Command::BATCH_SOLVE:{
-
-        if (args[1] == "greedy"){
-            GreedySolver::Options op(args);
-            BatchSolve<GreedySolver>(args[0], op);
-        }
-        else if (args[1] == "brute-force"){
-            BruteForceSolver::Options op(args);
-            BatchSolve<BruteForceSolver>(args[0], op);
-        }
-        else if (args[1] == "branch-and-bound"){
-            BranchAndBoundSolver::Options op(args);
-            BatchSolve<BranchAndBoundSolver>(args[0], op);
-        }
-        else 
-            throw std::invalid_argument(args[1] + " is not a recognised algorithm");
-        args.erase(args.begin());
-        args.erase(args.begin());
-
+        string algorithm = Consume(args, 1);
+        if (algorithm == "greedy") BatchSolveFromArgs<GreedySolver>(args);
+        else if (algorithm == "brute-force") BatchSolveFromArgs<BruteForceSolver>(args);
+        else if (algorithm == "branch-and-bound") BatchSolveFromArgs<BranchAndBoundSolver>(args);
+        else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
         break;
     }
 
     case Command::PRINT:{
-        cout << args[0];
-        args.erase(args.begin());
+        if (args.size() > 1) throw std::invalid_argument("print takes only one argument, provided: " + args.size());
+        cout << Consume(args, 0);
         break;
     }
 
@@ -226,7 +226,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
             }
             
             // invalid argument
-            else throw std::invalid_argument((*it) + "is not a recognised argument for command " + command);
+            else throw std::invalid_argument((*it) + " is not a recognised argument for command " + command);
 
         }
         
