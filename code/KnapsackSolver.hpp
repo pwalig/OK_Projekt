@@ -19,6 +19,7 @@ namespace knapsack_solver {
 class Solution {
     bool IsPathDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & length) const;
     bool IsCycleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start, const int & length) const;
+    bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start) const;
 
     public:
     int max_value;
@@ -29,18 +30,25 @@ class Solution {
     Solution();
     Solution(const int & InstanceSize, const std::vector<int> & available_space);
 
-    void AddItem(const Problem & problem, const int & selected_item_id);
-    void AddItemForce(const Problem & problem, const int & selected_item_id);
+    enum class FaultTreatment { INVALIDATE, THROW, IGNORE };
+
+    void AddItem(const Problem & problem, const int & selected_item_id, const FaultTreatment & fit_fault = FaultTreatment::THROW/*, const FaultTreatment & structure_fault = FaultTreatment::IGNORE*/);
     void RemoveItem(const Problem & problem, const int & selected_item_id);
-    bool Fits(const Problem & problem, const int & selected_item_id);
+    bool Fits(const Problem & problem, const int & selected_item_id) const;
     
     /// @returns true if addition was succesfull, false if item did not fit or was already in solution
     bool AddItemIfFits(const Problem & problem, const int & selected_item_id);
+
+    bool IsFit(const Problem & problem) const;
 
     bool IsPath(const Problem & problem) const;
     bool IsCycle(const Problem & problem) const;
     bool IsTree(const Problem & problem) const;
     bool IsConnected(const Problem & problem) const;
+    bool IsStructure(const PackagedProblem & problem) const;
+
+    bool IsValid(const PackagedProblem & problem) const;
+
     bool IsCyclePossible(const Problem & problem) const;
 };
 
@@ -48,6 +56,7 @@ class Solution {
 
 class Validation{
     public:
+    Validation() = delete;
     struct ValidationStatus{
         bool undergone = false;
         bool valid = true;
@@ -70,17 +79,18 @@ class PackagedSolution {
     public:
         std::string algorithm;
         Solution solution;
-        double to_optimum_ratio;
+        double quality;
         double solve_time;
         Validation::ValidationStatus validation_status;
     
-    void ExportJSON(const std::string file_name);
+    void ExportJSON(const std::string file_name) const;
 };
 
 
 
 class BruteForceSolver{
     public:
+    BruteForceSolver() = delete;
     struct Options{
         enum class SearchOrder { ZERO_FIRST, ONE_FIRST, RANDOM, GRAY_CODE, UNCONSTRAINED };
         SearchOrder search_order = SearchOrder::UNCONSTRAINED;
@@ -92,13 +102,13 @@ class BruteForceSolver{
     };
 
     private:
-    static Solution Max(const Solution & a, const Solution & b);
+    static Solution Max(const Solution & a, const Solution & b, const PackagedProblem & problem);
     static Solution SolutionFromNumber(int num, const Problem & problem);
-    static Solution DFS(const Problem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const int & depth);
-    static Solution DFS(const Problem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const bool & add, const int & depth);
+    static Solution DFS(const PackagedProblem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const int & depth);
+    static Solution DFS(const PackagedProblem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const bool & add, const int & depth);
 
     public:
-    static PackagedSolution Solve(const PackagedProblem & problem, const Options options);
+    static PackagedSolution Solve(PackagedProblem & problem, const Options options);
     static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
     
     static Solution Iterative(const PackagedProblem & problem, const Options::SearchOrder & search_order);
@@ -109,6 +119,7 @@ class BruteForceSolver{
 
 class BranchAndBoundSolver{
     private:
+    BranchAndBoundSolver() = delete;
     static int GreedyIgnoreConnections(const Problem & problem, const Problem::SortMode & sortMode, Solution currentSolution);
 
     static Solution DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId);
@@ -126,7 +137,7 @@ class BranchAndBoundSolver{
     static Solution BnBLateFitPath(const Problem & problem);
     static Solution BnBEarlyFitPath(const Problem & problem);
 
-    static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
+    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
     static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
 };
 
@@ -134,14 +145,15 @@ class BranchAndBoundSolver{
 
 class GreedySolver{
     public:
+    GreedySolver() = delete;
     struct Options{
-        Problem::SortMode sort_mode = Problem::SortMode::WEIGHT_VALUE_RATIO;
+        Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
         int buffor = 1;
         Options() = default;
         explicit Options(std::vector<std::string> & args);
     };
 
-    static PackagedSolution Solve(const PackagedProblem & problem, const Options & options);
+    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
     static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
 
     static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
@@ -153,14 +165,15 @@ class GreedySolver{
 
 class FloydSolver{
     public:
-    static PackagedSolution Solve(const PackagedProblem & problem);
+    FloydSolver() = delete;
+    static PackagedSolution Solve(PackagedProblem & problem);
     static Solution Connected(const Problem & problem);
 };
 
 
 
 template <typename T>
-inline PackagedSolution Solve(const PackagedProblem & problem, const typename T::Options & options){
+inline PackagedSolution Solve(PackagedProblem & problem, const typename T::Options & options){
     return T::Solve(problem, options);
 }
 

@@ -146,7 +146,7 @@ vector<int> Problem::GetSortedItemIds(const SortMode & sortMode) const{
 
     switch (sortMode)
     {
-    case SortMode::WEIGHT_VALUE_RATIO:
+    case SortMode::VALUE_WEIGHT_RATIO:
         std::sort(toSort.begin(), toSort.end(), [](el a, el b){
             if (a.weight == 0 && b.weight == 0){
                 return a.value > b.value;
@@ -218,7 +218,7 @@ ostream& operator<<(ostream & os, const Problem & p) {
 
 //--------- PACKAGED PROBLEM ----------
 
-PackagedProblem::PackagedProblem(const string & file_name) : known_optimum(-1) {
+PackagedProblem::PackagedProblem(const string & file_name) : associated_file(file_name) {
     std::ifstream fin (file_name);
     json data = json::parse(fin);
 
@@ -233,10 +233,13 @@ PackagedProblem::PackagedProblem(const string & file_name) : known_optimum(-1) {
     requirements.structureToFind = data["structure_to_find"];
     requirements.weightTreatment = data["weight_treatment"];
 
+    // known optimum
+    known_optimum = data["known_optimum"];
+
     fin.close();
 }
 
-PackagedProblem::PackagedProblem(const Problem::GenerationSettings & gs, const Problem::Requirements & rq) : problem(gs), requirements(rq), known_optimum(-1) { }
+PackagedProblem::PackagedProblem(const Problem::GenerationSettings & gs, const Problem::Requirements & rq) : problem(gs), requirements(rq), known_optimum(-1), associated_file("") { }
 
 void PackagedProblem::ExportJSON(const string & file_name) const{
     json data;
@@ -293,73 +296,113 @@ NLOHMANN_JSON_SERIALIZE_ENUM( Problem::Requirements::StructureToFind, {
     {Problem::Requirements::StructureToFind::CYCLE, "cycle"},
     {Problem::Requirements::StructureToFind::PATH, "path"},
     {Problem::Requirements::StructureToFind::TREE, "tree"},
-    {Problem::Requirements::StructureToFind::CONNECTED_GRAPH, "connected_graph"},
-    {Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS, "ignore_connections"}
+    {Problem::Requirements::StructureToFind::CONNECTED_GRAPH, "connected-graph"},
+    {Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS, "ignore-connections"}
 })
 
 NLOHMANN_JSON_SERIALIZE_ENUM( Problem::CycleGuarantee, {
-    {Problem::CycleGuarantee::CONTAINS_CYCLE, "contains_cycle"},
-    {Problem::CycleGuarantee::NO_CYCLE, "no_cycle"},
-    {Problem::CycleGuarantee::NO_GUARANTEES, "no_guarantees"}
+    {Problem::CycleGuarantee::CONTAINS_CYCLE, "contains-cycle"},
+    {Problem::CycleGuarantee::NO_CYCLE, "no-cycle"},
+    {Problem::CycleGuarantee::NO_GUARANTEES, "no-guarantees"}
 })
 
 NLOHMANN_JSON_SERIALIZE_ENUM( Problem::Requirements::WeightTreatment, {
-    {Problem::Requirements::WeightTreatment::IGNORE_ALL, "ignore_all"},
-    {Problem::Requirements::WeightTreatment::RESPECT_ALL, "respect_all"},
-    {Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY, "respect_first_only"},
-    {Problem::Requirements::WeightTreatment::SET_ALL_TO_1, "set_all_to_1"}
+    {Problem::Requirements::WeightTreatment::IGNORE_ALL, "ignore-all"},
+    {Problem::Requirements::WeightTreatment::RESPECT_ALL, "respect-all"},
+    {Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY, "respect-first-only"},
+    {Problem::Requirements::WeightTreatment::SET_ALL_TO_1, "set-all-to-1"}
 })
 
 }
 
-std::ostream& operator<<(std::ostream & os, const Problem::CycleGuarantee & cg){
+std::string ToString(const Problem::CycleGuarantee & cg){
     switch(cg){
         case Problem::CycleGuarantee::CONTAINS_CYCLE:
-        os << "contains_cycle";
+        return "contains-cycle";
         break;
         case Problem::CycleGuarantee::NO_CYCLE:
-        os << "no_cycle";
+        return "no-cycle";
         break;
         case Problem::CycleGuarantee::NO_GUARANTEES:
-        os << "no_guarantees";
+        return "no-guarantees";
+        break;
+        default:
+        throw std::invalid_argument("unrecognised value");
         break;
     }
-    return os;
+
 }
-std::ostream& operator<<(std::ostream & os, const Problem::Requirements::StructureToFind & stf){
+string ToString(const Problem::Requirements::StructureToFind & stf){
     switch(stf){
         case Problem::Requirements::StructureToFind::CYCLE:
-        os << "cycle";
+        return "cycle";
         break;
         case Problem::Requirements::StructureToFind::PATH:
-        os << "path";
+        return "path";
         break;
         case Problem::Requirements::StructureToFind::TREE:
-        os << "tree";
+        return "tree";
         break;
         case Problem::Requirements::StructureToFind::CONNECTED_GRAPH:
-        os << "connected_graph";
+        return "connected-graph";
         break;
         case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
-        os << "ignore_connections";
+        return "ignore-connections";
+        break;
+        default:
+        throw std::invalid_argument("unrecognised value");
         break;
     }
-    return os;
 }
-std::ostream& operator<<(std::ostream & os, const Problem::Requirements::WeightTreatment & wt){
+string ToString(const Problem::Requirements::WeightTreatment & wt){
     switch(wt){
         case Problem::Requirements::WeightTreatment::IGNORE_ALL:
-        os << "ignore_all";
+        return "ignore-all";
         break;
         case Problem::Requirements::WeightTreatment::RESPECT_ALL:
-        os << "respect_all";
+        return "respect-all";
         break;
         case Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY:
-        os << "respect_first_only";
+        return "respect-first_only";
         break;
         case Problem::Requirements::WeightTreatment::SET_ALL_TO_1:
-        os << "set_all_to_1";
+        return "set-all-to-1";
+        break;
+        default:
+        throw std::invalid_argument("unrecognised value");
         break;
     }
-    return os;
+}
+string ToString(const knapsack_solver::Problem::SortMode & sm){
+    switch (sm)
+    {
+    case Problem::SortMode::VALUE_WEIGHT_RATIO:
+        return "value/weight";
+        break;
+    case Problem::SortMode::VALUE:
+        return "value";
+        break;
+    case Problem::SortMode::WEIGHT:
+        return "weight";
+        break;
+    case Problem::SortMode::RANDOM:
+        return "random";
+        break;
+    case Problem::SortMode::DONT_SORT:
+        return "dont-sort";
+        break;
+        default:
+        throw std::invalid_argument("unrecognised value");
+        break;
+    }
+}
+
+std::ostream& operator<<(std::ostream & os, const Problem::CycleGuarantee & cg){
+    return os << ToString(cg);
+}
+std::ostream& operator<<(std::ostream & os, const Problem::Requirements::StructureToFind & stf){
+    return os << ToString(stf);
+}
+std::ostream& operator<<(std::ostream & os, const Problem::Requirements::WeightTreatment & wt){
+    return os << ToString(wt);
 }

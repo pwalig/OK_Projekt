@@ -15,6 +15,7 @@
 #include <chrono>
 #include <fstream> // std::ofstream
 #include <stdexcept> // throw error types
+#include <cfloat> // DBL_MAX
 
 using namespace knapsack_solver;
 using std::vector;
@@ -45,23 +46,12 @@ ostream& operator<<(ostream& os, const Solution& s){
     return (os << endl);
 }
 
-void Solution::AddItem(const Problem & problem, const int & selected_item_id){
+void Solution::AddItem(const Problem & problem, const int & selected_item_id, const FaultTreatment & fit_fault){
     for (int j = 0; j < remainingSpace.size(); ++j){
         remainingSpace[j] -= problem.items[selected_item_id].weights[j];
         if (remainingSpace[j] < 0) {
-            throw std::invalid_argument("item does not fit");
-        }
-    }
-    this->max_value += problem.items[selected_item_id].value; // update max value
-    if (this->selected[selected_item_id] == true) throw std::invalid_argument("item was already in the solution");
-    this->selected[selected_item_id] = true; // add item to solution
-}
-
-void Solution::AddItemForce(const Problem & problem, const int & selected_item_id){
-    for (int j = 0; j < remainingSpace.size(); ++j){
-        remainingSpace[j] -= problem.items[selected_item_id].weights[j];
-        if (remainingSpace[j] < 0) {
-            this->valid = false;
+            if (fit_fault == FaultTreatment::THROW) throw std::invalid_argument("item does not fit");
+            else if (fit_fault == FaultTreatment::INVALIDATE) valid = false;
         }
     }
     this->max_value += problem.items[selected_item_id].value; // update max value
@@ -79,7 +69,7 @@ void Solution::RemoveItem(const Problem & problem, const int & selected_item_id)
     this->selected[selected_item_id] = false; // remove item from solution
 }
 
-bool Solution::Fits(const Problem & problem, const int & selected_item_id){
+bool Solution::Fits(const Problem & problem, const int & selected_item_id) const{
     for (int j = 0; j < remainingSpace.size(); ++j){
         if (remainingSpace[j] < problem.items[selected_item_id].weights[j]){
             return false;
@@ -103,12 +93,25 @@ bool Solution::AddItemIfFits(const Problem & problem, const int & selected_item_
     return true;
 }
 
+bool Solution::IsFit(const Problem & problem) const{
+    vector<int> remainigSpaces = problem.knapsack_sizes;
+    for (int i = 0; i < this->selected.size(); ++i){
+        if (this->selected[i]) {
+            for (int j = 0; j < remainigSpaces.size(); ++j){
+                remainigSpaces[j] -= problem.items[i].weights[j];
+                if (remainigSpaces[j] < 0) return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool Solution::IsPathDFS(const Problem & problem, vector<int> & visited, const int & current, const int & length) const{
     for (int next : problem.items[current].connections) {
         if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
-            if (visited.size() + 1 == length) return true; // path found
-            if (visited.size() + 1 > length) return false; // path would have to be to long
             visited.push_back(next);
+            if (visited.size() == length) return true; // path found
+            if (visited.size() > length) return false; // path would have to be to long
             if (IsPathDFS(problem, visited, next, length)) return true; // path found later
             visited.pop_back();
         }
@@ -140,9 +143,9 @@ bool Solution::IsPath(const Problem & problem) const{
 bool Solution::IsCycleDFS(const Problem & problem, vector<int> & visited, const int & current, const int & start, const int & length) const{
     for (int next : problem.items[current].connections) {
         if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
-            if (visited.size() + 1 == length && problem.items[next].HasConnectionTo(start)) return true; // cycle found
-            if (visited.size() + 1 > length) return false; // cycle would have to be to long
             visited.push_back(next);
+            if (visited.size() == length && problem.items[next].HasConnectionTo(start)) return true; // cycle found
+            if (visited.size() > length) return false; // cycle would have to be to long
             if (IsCycleDFS(problem, visited, next, start, length)) return true; // cycle found later
             visited.pop_back();
         }
@@ -180,8 +183,68 @@ bool Solution::IsConnected(const Problem & problem) const{
     throw std::logic_error("not implemented yet");
     return false;
 }
+
+bool Solution::IsStructure(const PackagedProblem & problem) const{
+    switch (problem.requirements.structureToFind)
+    {
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
+        return true;
+        break;
+
+    case Problem::Requirements::StructureToFind::CONNECTED_GRAPH:
+        return IsConnected(problem.problem);
+        break;
+
+    case Problem::Requirements::StructureToFind::PATH:
+        return IsPath(problem.problem);
+        break;
+        
+    case Problem::Requirements::StructureToFind::CYCLE:
+        return IsCycle(problem.problem);
+        break;
+        
+    case Problem::Requirements::StructureToFind::TREE:
+        return IsTree(problem.problem);
+        break;
+    
+    default:
+        throw std::invalid_argument("unnknown structure");
+        break;
+    }
+}
+
+bool Solution::IsValid(const PackagedProblem & problem) const{
+    return IsFit(problem.problem) && IsStructure(problem);
+}
+
+bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, const int & current, const int & start) const{
+    for (int next : problem.items[current].connections) {
+        if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
+            visited.push_back(next);
+            if (problem.items[next].HasConnectionTo(start)){ // found some cycle lets check if it has all selected vertices
+                bool _found;
+                for (int i = 0; i < this->selected.size(); ++i){
+                    if (this->selected[i] && std::find(visited.begin(), visited.end(), next) == visited.end()){
+                        _found = false;
+                        break;
+                    }
+                }
+                if (_found) return true; // it has - cycle found
+            }
+            if (IsCyclePossibleDFS(problem, visited, next, start)) return true; // cycle found later
+            visited.pop_back();
+        }
+    }
+    return false; // cycle not found
+}
 bool Solution::IsCyclePossible(const Problem & problem) const{
-    throw std::logic_error("not implemented yet");
+    if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
+    vector<int> visited;
+    for(int i = 0; i < selected.size(); ++i){
+        visited.push_back(i);
+        if (IsCyclePossibleDFS(problem, visited, i, i)) return true; // cycle found somewhere
+        visited.pop_back();
+    }
     return false;
 }
 
@@ -190,12 +253,12 @@ bool Solution::IsCyclePossible(const Problem & problem) const{
 
 //---------- PACKAGED SOLUTION ----------
 
-void PackagedSolution::ExportJSON(const std::string file_name){
+void PackagedSolution::ExportJSON(const std::string file_name) const{
     json data;
 
     // packaged soution
     data["algorithm"] = algorithm;
-    to_optimum_ratio >= 0 ? data["to_optimum_ratio"] = to_optimum_ratio : data["to_optimum_ratio"] = "optimum_unnown";
+    quality >= 0 ? data["to_optimum_ratio"] = quality : data["to_optimum_ratio"] = "optimum_unnown";
     data["solve_time"] = solve_time;
     data["remaining_spaces"] = solution.remainingSpace;
 
@@ -225,7 +288,7 @@ ostream& operator<<(ostream& os, const PackagedSolution& ps){
     // packaged solution
     os << "solved with: " << ps.algorithm << endl << ps.solution;
     os << "to_optimum_ratio: ";
-    ps.to_optimum_ratio >= 0 ? os << ps.to_optimum_ratio : os << "optimum unknown";
+    ps.quality >= 0 ? os << ps.quality : os << "optimum unknown";
     os << "\nsolve time: " << ps.solve_time << endl;
 
     // validation status
@@ -276,23 +339,7 @@ Validation::ValidationStatus Validation::Validate(const Solution & solution, con
     if (solution.remainingSpace != calculatedRemainingSpace) vs.remaining_space = false; // solution calculated its remaining space wrong
     for (int weight : calculatedRemainingSpace) if (weight < 0) vs.fit = false; // items dont fit
 
-    switch (problem.requirements.structureToFind)
-    {
-    case Problem::Requirements::StructureToFind::PATH:
-        vs.structure = solution.IsPath(problem.problem);
-        break;
-        
-    case Problem::Requirements::StructureToFind::CYCLE:
-        vs.structure = solution.IsCycle(problem.problem);
-        break;
-    
-    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
-        vs.structure = true;
-        break;
-
-    default:
-        break;
-    }
+    vs.structure = solution.IsStructure(problem);
 
     vs.valid = vs.value && vs.remaining_space && vs.fit && vs.structure; // set main valid
     if (solution.valid != vs.valid) {vs.self_valid = false; vs.valid = false;} // solution either: invalided itself for no reason, or: thought it was valid even though it was not
@@ -302,20 +349,7 @@ Validation::ValidationStatus Validation::Validate(const Solution & solution, con
 }
 
 int Validation::GoalFunction(const Solution & solution, const PackagedProblem & problem){
-
-    switch (problem.requirements.structureToFind)
-    {
-    case Problem::Requirements::StructureToFind::PATH:
-        if (!solution.IsPath(problem.problem)) return INT_MIN;
-        break;
-        
-    case Problem::Requirements::StructureToFind::CYCLE:
-        if (!solution.IsCycle(problem.problem)) return INT_MIN;
-        break;
-
-    default:
-        break;
-    }
+    if (!solution.IsValid(problem)) return INT_MIN;
     return CalculateMaxValue(solution, problem.problem);
 }
 
@@ -324,15 +358,11 @@ int Validation::GoalFunction(const Solution & solution, const PackagedProblem & 
 
 //---------- BRUTE FORCE SOLVER ----------
 
-PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const Options options){
-    if (problem.requirements.structureToFind != Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS)
-        throw std::logic_error("Structures other than ignore connections are uniplemented for brute force solver");
-    
+PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Options options){    
     PackagedSolution ps;
-    std::chrono::steady_clock::time_point start, end;
 
     // fil algorithm info / details
-    ps.algorithm = "brute-force_ignore-connections_";
+    ps.algorithm = "brute-force_" + ToString(problem.requirements.structureToFind) + "_";
     if (options.iterative) {
         ps.algorithm += "iterative_";
 
@@ -361,6 +391,7 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
     }
     
     // run with time measure
+    std::chrono::steady_clock::time_point start, end;
     if (options.iterative) {
         start = std::chrono::steady_clock::now();
         ps.solution = Iterative(problem, options.search_order);
@@ -373,17 +404,26 @@ PackagedSolution BruteForceSolver::Solve(const PackagedProblem & problem, const 
     }
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = 1.0;
 
     // validate
     ps.validation_status = Validation::Validate(ps.solution, problem);
 
+    // optimum update
+    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
+        problem.known_optimum = ps.solution.max_value;
+        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
+    }
+    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
+
     return ps;
 }
 
-Solution BruteForceSolver::Max(const Solution & a, const Solution & b){
-    if (a.valid && !b.valid) return a;
-    if (!a.valid && b.valid) return b;
+Solution BruteForceSolver::Max(const Solution & a, const Solution & b, const PackagedProblem & problem){
+    bool va = a.valid && a.IsStructure(problem);
+    bool vb = b.valid && b.IsStructure(problem);
+    if (va && !vb) return a;
+    if (!va && vb) return b;
     else if (a.max_value > b.max_value) return a;
     else return b;
 }
@@ -395,7 +435,7 @@ Solution BruteForceSolver::SolutionFromNumber(int num, const Problem & problem) 
     int i = problem.items.size();
     while (num != 0) {
         --i;
-        if (num % 2 == 1) solution.AddItemForce(problem, i);
+        if (num % 2 == 1) solution.AddItem(problem, i, Solution::FaultTreatment::INVALIDATE);
  
         // Integer division
         // gives quotient
@@ -415,14 +455,14 @@ Solution BruteForceSolver::Iterative(const PackagedProblem & problem, const Opti
     case Options::SearchOrder::ZERO_FIRST:
         for (int i = 0; i < n; ++i) {
             Solution temp_solution = SolutionFromNumber(i, problem.problem);
-            if (temp_solution.valid && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+            if (temp_solution.valid && temp_solution.IsStructure(problem) && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
         }
         break;
 
     case Options::SearchOrder::ONE_FIRST:
         for (int i = n - 1; i >= 0; --i) {
             Solution temp_solution = SolutionFromNumber(i, problem.problem);
-            if (temp_solution.valid && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+            if (temp_solution.valid && temp_solution.IsStructure(problem) && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
         }
         break;
 
@@ -434,41 +474,41 @@ Solution BruteForceSolver::Iterative(const PackagedProblem & problem, const Opti
     return global_solution;
 }
 
-Solution BruteForceSolver::DFS(const Problem & problem, Solution sol0, const Options::SearchOrder & search_order, const bool & add, const int & depth){
-    if (add) sol0.AddItemForce(problem, depth);
-    if (depth == problem.items.size() - 1) return sol0;
+Solution BruteForceSolver::DFS(const PackagedProblem & problem, Solution sol0, const Options::SearchOrder & search_order, const bool & add, const int & depth){
+    if (add) sol0.AddItem(problem.problem, depth, Solution::FaultTreatment::INVALIDATE);
+    if (depth == problem.problem.items.size() - 1) return sol0;
 
-    return Max(DFS(problem, sol0, search_order, false, depth + 1), DFS(problem, sol0, search_order, true, depth + 1));
+    return Max(DFS(problem, sol0, search_order, false, depth + 1), DFS(problem, sol0, search_order, true, depth + 1), problem);
 }
 
-Solution BruteForceSolver::DFS(const Problem & problem, Solution sol0, const Options::SearchOrder & search_order, const int & depth){
-    int isiz = problem.items.size();
+Solution BruteForceSolver::DFS(const PackagedProblem & problem, Solution sol0, const Options::SearchOrder & search_order, const int & depth){
+    int isiz = problem.problem.items.size();
     if (depth == isiz) return sol0;
     
     Solution sol1 = sol0;
     sol0 = DFS(problem, sol0, search_order, depth + 1);
-    sol1.AddItemForce(problem, depth);
+    sol1.AddItem(problem.problem, depth, Solution::FaultTreatment::INVALIDATE);
     sol1 = DFS(problem, sol1, search_order, depth + 1);
 
-    return Max(sol0, sol1);
+    return Max(sol0, sol1, problem);
 }
 
 Solution BruteForceSolver::Recursive(const PackagedProblem & problem, const Options & options){
     if (options.search_order != BruteForceSolver::Options::SearchOrder::UNCONSTRAINED)
-        throw std::invalid_argument("recursive does not support searc order"); //it could be supported, but it slows algorithm down
+        throw std::invalid_argument("recursive does not support search order"); //it could be supported, but it slows algorithm down
     
     int isiz = problem.problem.items.size();
     Solution sol0(isiz, problem.problem.knapsack_sizes);
     
     if (options.late_fit) {
-        return Max(DFS(problem.problem, sol0, options.search_order, false, 0), DFS(problem.problem, sol0, options.search_order, true, 0));
+        return Max(DFS(problem, sol0, options.search_order, false, 0), DFS(problem, sol0, options.search_order, true, 0), problem);
     }
     else{
         Solution sol1 = sol0;
-        sol0 = DFS(problem.problem, sol0, options.search_order, 1);
-        sol1.AddItemForce(problem.problem, 0);
-        sol1 = DFS(problem.problem, sol1, options.search_order, 1);
-        return Max(sol0, sol1);
+        sol0 = DFS(problem, sol0, options.search_order, 1);
+        sol1.AddItem(problem.problem, 0, Solution::FaultTreatment::INVALIDATE);
+        sol1 = DFS(problem, sol1, options.search_order, 1);
+        return Max(sol0, sol1, problem);
     }
 
 }
@@ -477,26 +517,13 @@ Solution BruteForceSolver::Recursive(const PackagedProblem & problem, const Opti
 
 //---------- GREEDY SOLVER ----------
 
-PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Options & options){
+PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
 
     // fill algorithm info / details
     ps.algorithm = "";
-
     switch (options.sort_mode)
     {
-    case Problem::SortMode::WEIGHT_VALUE_RATIO:
-        ps.algorithm += "greedy-sort-by-value-weight";
-        break;
-        
-    case Problem::SortMode::VALUE:
-        ps.algorithm += "greedy-sort-by-value";
-        break;
-        
-    case Problem::SortMode::WEIGHT:
-        ps.algorithm += "greedy-sort-by-weight";
-        break;
-
     case Problem::SortMode::RANDOM:
         ps.algorithm += "random-fit";
         break;
@@ -506,21 +533,10 @@ PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Opti
         break;
 
     default:
+        ps.algorithm += "greedy-sort-by-" + ToString(options.sort_mode);
         break;
     }
-
-    switch (problem.requirements.structureToFind)
-    {
-    case Problem::Requirements::StructureToFind::PATH:
-        ps.algorithm += "_path";
-        break;
-    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
-        ps.algorithm += "_ignore-connections";
-        break;
-    
-    default:
-        break;
-    }
+    ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -530,10 +546,16 @@ PackagedSolution GreedySolver::Solve(const PackagedProblem & problem, const Opti
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
 
-    ps.to_optimum_ratio = ps.solution.max_value / problem.known_optimum;
-
     // validate
     ps.validation_status = Validation::Validate(ps.solution, problem);
+
+    // optimum update
+    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
+        problem.known_optimum = ps.solution.max_value;
+        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
+    }
+    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }
@@ -548,39 +570,56 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
 
     case Problem::Requirements::StructureToFind::PATH:
     {
-        // Find best starting point
-        int startItem = -1;
-        for (int currentItemId : sortedItemIds) {
-            if (globalSolution.Fits(problem.problem, currentItemId)){
-                globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
-                startItem = currentItemId;
-                break;
-            }
-        }
-        if (startItem == -1) return globalSolution; // nothing fits
-
-        bool going = true;
-        while (going){
-            going = false;
-            // find next item
-            for (auto it = sortedItemIds.begin(); it != sortedItemIds.end(); ++it) {
-                int currentItemId = *it;
-                if (!globalSolution.selected[currentItemId] &&
-                    problem.problem.items[startItem].HasConnectionTo(currentItemId) &&
-                    globalSolution.Fits(problem.problem, currentItemId))
-                {
-                    globalSolution.AddItem(problem.problem, currentItemId);
+        if (true /*multi_run*/){ // ---------- PATH MULTI RUN ----------
+            // Find best starting point
+            int startItem = -1;
+            for (int currentItemId : sortedItemIds) {
+                if (globalSolution.Fits(problem.problem, currentItemId)){
+                    globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
                     startItem = currentItemId;
-                    going = true;
                     break;
                 }
+            }
+            if (startItem == -1) return globalSolution; // nothing fits
+
+            bool going = true;
+            while (going){
+                going = false;
+                // find next item
+                for (auto it = sortedItemIds.begin(); it != sortedItemIds.end(); ++it) {
+                    int currentItemId = *it;
+                    if (!globalSolution.selected[currentItemId] &&
+                        problem.problem.items[startItem].HasConnectionTo(currentItemId) &&
+                        globalSolution.Fits(problem.problem, currentItemId))
+                    {
+                        globalSolution.AddItem(problem.problem, currentItemId);
+                        startItem = currentItemId;
+                        going = true;
+                        break;
+                    }
+                }
+            }
+        }
+        else { // ---------- PATH SINGLE RUN ----------
+            for (int i = 0; i < isiz; ){
+                int currentItemId = sortedItemIds[i];
+
+                if (globalSolution.Fits(problem.problem, currentItemId))
+                    globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
+                else return globalSolution; // if does not fit return what have we managed to fit so far
+
+                i = -1;
+                int nextItem;
+                do{
+                    if (++i >= isiz) return globalSolution; // if can't find next possible item return what we had so far
+                    nextItem = sortedItemIds[i];
+                } while (globalSolution.selected[nextItem] || !problem.problem.items[currentItemId].HasConnectionTo(nextItem));
             }
         }
         break;
     }
 
-    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
-    {
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS: {
         for (int i = 0; i < isiz; ++i){
             int currentItemId = sortedItemIds[i];
 
@@ -590,9 +629,18 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
         break;
     }
     
-    default:
-    {
-        cout << "unimplemented yet\n";
+    case Problem::Requirements::StructureToFind::CYCLE: {
+        for (int i = 0; i < isiz; ++i){
+            int currentItemId = sortedItemIds[i];
+            
+            globalSolution.AddItemIfFits(problem.problem, currentItemId); // if current item fits add it to the current solution
+            if (!globalSolution.IsCyclePossible(problem.problem)) globalSolution.RemoveItem(problem.problem, currentItemId); // if adding it would make it impossible to construct a valid answer then remove it
+        }
+        break;
+    }
+    
+    default: {
+        throw std::logic_error("not implemented yet");
         break;
     }
     }
@@ -643,33 +691,37 @@ Solution GreedySolver::GreedyPath(const Problem & problem, const Options & optio
 
 //---------- BRANCH AND BOUND SOLVER ----------
 
-PackagedSolution BranchAndBoundSolver::Solve(const PackagedProblem & problem, const Options & options){
+PackagedSolution BranchAndBoundSolver::Solve(PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
-    Solution s;
     std::chrono::steady_clock::time_point start, end;
-    ps.algorithm = "branch-and-bound";
+    ps.algorithm = "branch-and-bound_" + ToString(problem.requirements.structureToFind);
 
     // solve with measured time
     if (options.late_fit){
-        start = std::chrono::steady_clock::now();
-        s = BnBLateFitPath(problem.problem);
-        end = std::chrono::steady_clock::now();
         ps.algorithm += "_late-fit";
+        start = std::chrono::steady_clock::now();
+        ps.solution = BnBLateFitPath(problem.problem);
+        end = std::chrono::steady_clock::now();
     }
     else{
-        start = std::chrono::steady_clock::now();
-        s = BnBEarlyFitPath(problem.problem);
-        end = std::chrono::steady_clock::now();
         ps.algorithm += "_early-fit";
+        start = std::chrono::steady_clock::now();
+        ps.solution = BnBEarlyFitPath(problem.problem);
+        end = std::chrono::steady_clock::now();
     }
     const std::chrono::duration<double> elapsed_seconds{end - start};
-
-    ps.algorithm += "_path";
-    ps.solution = s;
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = 1.0;
 
-    ps.validation_status = Validation::Validate(s, problem);
+    // validate
+    ps.validation_status = Validation::Validate(ps.solution, problem);
+
+    // optimum update
+    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
+        problem.known_optimum = ps.solution.max_value;
+        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
+    }
+    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }
@@ -709,7 +761,7 @@ Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution
             Solution tempSolution = currentSolution;
 
             tempSolution.AddItem(problem, nextItemId);
-            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::WEIGHT_VALUE_RATIO, tempSolution, remainingSpace) > lower_bound*/) {
+            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, tempSolution, remainingSpace) > lower_bound*/) {
                 tempSolution = DFSEarlyFitPath(problem, tempSolution, nextItemId, lower_bound);
                 if (tempSolution.max_value > globalSolution.max_value) {
                     globalSolution = tempSolution;
@@ -735,7 +787,7 @@ Solution BranchAndBoundSolver::BnBEarlyFitPath(const Problem & problem) {
         if (globalSolution.Fits(problem, i)){
             Solution currentSolution(isiz, problem.knapsack_sizes); // create empty solution
             currentSolution.AddItem(problem, i);
-            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::WEIGHT_VALUE_RATIO, currentSolution, remainingSpace) > globalSolution.max_value*/){
+            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, currentSolution, remainingSpace) > globalSolution.max_value*/){
                 currentSolution = DFSEarlyFitPath(problem, currentSolution, i, globalSolution.max_value);
                 if(currentSolution.max_value > globalSolution.max_value) globalSolution = currentSolution; // if newly found solution is better use it as you global solution
             }
@@ -793,7 +845,7 @@ Solution BranchAndBoundSolver::BnBLateFitPath(const Problem & problem) {
 
 //---------- FLOYD SOLVER ----------
 
-PackagedSolution FloydSolver::Solve(const PackagedProblem & problem){
+PackagedSolution FloydSolver::Solve(PackagedProblem & problem){
     PackagedSolution ps;
     std::chrono::steady_clock::time_point start, end;
     Solution s;
@@ -816,7 +868,17 @@ PackagedSolution FloydSolver::Solve(const PackagedProblem & problem){
     ps.solution = s;
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-    ps.to_optimum_ratio = s.max_value / problem.known_optimum;
+
+    // validate
+    ps.validation_status = Validation::Validate(ps.solution, problem);
+
+    // optimum update
+    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
+        problem.known_optimum = ps.solution.max_value;
+        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
+    }
+    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }

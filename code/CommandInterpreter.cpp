@@ -60,7 +60,7 @@ std::string CommandInterpreter::Consume(std::vector<std::string> & args, const i
 GreedySolver::Options::Options(std::vector<std::string> & args){
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
-        if (arg == "value/weight") sm = Problem::SortMode::WEIGHT_VALUE_RATIO;
+        if (arg == "value/weight") sm = Problem::SortMode::VALUE_WEIGHT_RATIO;
         else if (arg == "value") sm = Problem::SortMode::VALUE;
         else if (arg == "weight") sm = Problem::SortMode::WEIGHT;
         else if (arg == "dont-sort") sm = Problem::SortMode::DONT_SORT;

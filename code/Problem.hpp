@@ -70,7 +70,7 @@ class Problem {
     /// @deprecated use PackagedProblem::BatchGeneratePackagedProblemsJSON()
     static void BatchGenerateProblemsJSON(const GenerationSettings & gs, const int & amount, const std::string & directory_path, const std::string & batch_name, const std::string & file_name);
 
-    enum class SortMode {WEIGHT_VALUE_RATIO, WEIGHT, VALUE, RANDOM, DONT_SORT};
+    enum class SortMode {VALUE_WEIGHT_RATIO, WEIGHT, VALUE, RANDOM, DONT_SORT};
     
     std::vector<int> GetSortedItemIds(const SortMode & sortMode) const;
     int GetValueSum() const;
@@ -81,6 +81,7 @@ class PackagedProblem{
     Problem problem;
     Problem::Requirements requirements;
     int known_optimum;
+    std::string associated_file;
     
     PackagedProblem(const std::string & file_name);
     PackagedProblem(const Problem::GenerationSettings & gs, const Problem::Requirements & rq);
@@ -101,3 +102,9 @@ std::ostream& operator<<(std::ostream & os, const knapsack_solver::PackagedProbl
 std::ostream& operator<<(std::ostream & os, const knapsack_solver::Problem::CycleGuarantee & cg);
 std::ostream& operator<<(std::ostream & os, const knapsack_solver::Problem::Requirements::StructureToFind & stf);
 std::ostream& operator<<(std::ostream & os, const knapsack_solver::Problem::Requirements::WeightTreatment & wt);
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::Problem::SortMode & sm);
+
+std::string ToString(const knapsack_solver::Problem::CycleGuarantee & cg);
+std::string ToString(const knapsack_solver::Problem::Requirements::StructureToFind & stf);
+std::string ToString(const knapsack_solver::Problem::Requirements::WeightTreatment & wt);
+std::string ToString(const knapsack_solver::Problem::SortMode & sm);
