@@ -234,7 +234,7 @@ PackagedProblem::PackagedProblem(const string & file_name) : associated_file(fil
     requirements.weightTreatment = data["weight_treatment"];
 
     // known optimum
-    known_optimum = data["known_optimum"];
+    known_optimum = data["optimum"];
 
     fin.close();
 }
@@ -251,7 +251,7 @@ void PackagedProblem::ExportJSON(const string & file_name) const{
     data["cycle_guarantee"] = this->problem.cycleGuarantee;
     data["structure_to_find"] = this->requirements.structureToFind;
     data["weight_treatment"] = this->requirements.weightTreatment;
-    data["known_optimum"] = this->known_optimum;
+    data["optimum"] = this->known_optimum;
     std::ofstream fout(file_name);
     fout << data.dump(4);
     fout.close();
@@ -281,7 +281,8 @@ ostream& operator<<(ostream & os, const PackagedProblem & pp) {
     os << pp.problem;
     os << "structure to find: " << pp.requirements.structureToFind << endl;
     os << "weight treatment: " << pp.requirements.weightTreatment << endl;
-    os << "known_optimum: " << pp.known_optimum << endl;
+    os << "optimum: ";
+    pp.known_optimum >= 0 ? os << pp.known_optimum : os << "unknown";
     return (os << endl);
 }
 

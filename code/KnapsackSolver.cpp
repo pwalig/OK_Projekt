@@ -292,6 +292,7 @@ void PackagedSolution::ExportJSON(const std::string file_name) const{
         data["validation_status"]["self_valid"] = validation_status.self_valid;
         data["validation_status"]["structure"] = validation_status.structure;
         data["validation_status"]["value"] = validation_status.value;
+        data["validation_status"]["quality"] = validation_status.quality;
     }
     else data["validation_status"] = "did_not_undergo_validation";
 
@@ -316,6 +317,7 @@ ostream& operator<<(ostream& os, const PackagedSolution& ps){
         os << "\tremaining_space: " << ps.validation_status.remaining_space << endl;
         os << "\tstructure: " << ps.validation_status.structure << endl;
         os << "\tself_valid: " << ps.validation_status.self_valid << endl;
+        os << "\tquality: " << ps.validation_status.quality << endl;
     }
     else os << "did_not_undergo_validation";
 
@@ -412,13 +414,17 @@ PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Option
 
     // validate
     ps.validation_status = Validation::Validate(ps.solution, problem);
+    if (ps.solution.max_value < problem.known_optimum) {
+        ps.validation_status.quality = false;
+        ps.validation_status.valid = false;
+    }
 
     // optimum update
     if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
         problem.known_optimum = ps.solution.max_value;
         if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
     }
-    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
     else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
@@ -562,7 +568,7 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
         problem.known_optimum = ps.solution.max_value;
         if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
     }
-    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
     else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
@@ -727,13 +733,17 @@ PackagedSolution BranchAndBoundSolver::Solve(PackagedProblem & problem, const Op
 
     // validate
     ps.validation_status = Validation::Validate(ps.solution, problem);
+    if (ps.solution.max_value < problem.known_optimum) {
+        ps.validation_status.quality = false;
+        ps.validation_status.valid = false;
+    }
 
     // optimum update
     if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
         problem.known_optimum = ps.solution.max_value;
         if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
     }
-    if (ps.solution.max_value == 0) ps.quality = DBL_MAX;
+    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
     else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;

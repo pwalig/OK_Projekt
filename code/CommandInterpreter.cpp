@@ -110,8 +110,14 @@ void CommandInterpreter::BatchSolveFromArgs(std::vector<std::string> & args){
 template <typename T>
 PackagedSolution CommandInterpreter::SolveFromArgs(std::vector<std::string> & args){
     typename T::Options op(args);
-    if (args.size() > 1) throw std::invalid_argument(args[1] + " is not a recognised argument for command " + "solve");
     PackagedProblem pp(Consume(args, 0));
+    Consume<PackagedProblem>(args, "-structure", [](const string & arg, PackagedProblem & _p_p){
+        if (_p_p.requirements.structureToFind == ToStructureToFind(arg)) return;
+        _p_p.requirements.structureToFind = ToStructureToFind(arg);
+        _p_p.associated_file = "";
+        _p_p.known_optimum = -1;
+    }, pp);
+    if (args.size() > 0) throw std::invalid_argument(args[0] + " is not a recognised argument for command " + "solve");
     return Solve<T>(pp, op);
 }
 
