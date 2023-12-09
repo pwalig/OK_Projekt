@@ -58,14 +58,13 @@ std::string CommandInterpreter::Consume(std::vector<std::string> & args, const i
 // ---------- OPTIONS CONSTRUCTORS ----------
 
 GreedySolver::Options::Options(std::vector<std::string> & args){
+    // multi-run / single-run
+    CommandInterpreter::Consume<bool>(args, "-single-run", [](const string & arg, bool & sr){
+        sr = false;
+    }, this->multi_run);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
-        if (arg == "value/weight") sm = Problem::SortMode::VALUE_WEIGHT_RATIO;
-        else if (arg == "value") sm = Problem::SortMode::VALUE;
-        else if (arg == "weight") sm = Problem::SortMode::WEIGHT;
-        else if (arg == "dont-sort") sm = Problem::SortMode::DONT_SORT;
-        else if (arg == "random") sm = Problem::SortMode::RANDOM;
-        else throw std::invalid_argument(arg + " is not a valid visit order for brute force algorithm");
+        sm = ToSortMode(arg);
     }, this->sort_mode);
 }
 
@@ -82,12 +81,7 @@ BruteForceSolver::Options::Options(std::vector<std::string> & args) : Options(){
 
     // search order
     CommandInterpreter::Consume<Options::SearchOrder>(args, "-order", [](const string & arg, Options::SearchOrder & so){
-        if (arg == "zero") so = BruteForceSolver::Options::SearchOrder::ZERO_FIRST;
-        else if (arg == "one") so = BruteForceSolver::Options::SearchOrder::ONE_FIRST;
-        else if (arg == "any") so = BruteForceSolver::Options::SearchOrder::UNCONSTRAINED;
-        else if (arg == "gray") so = BruteForceSolver::Options::SearchOrder::GRAY_CODE;
-        else if (arg == "random") so = BruteForceSolver::Options::SearchOrder::RANDOM;
-        else throw std::invalid_argument(arg + " is not a valid visit order for brute force algorithm");
+        so = ToSearchOrder(arg);
     }, this->search_order);
 }
 
@@ -99,10 +93,7 @@ BranchAndBoundSolver::Options::Options(std::vector<std::string> & args) : Option
 
     // bounding function
     CommandInterpreter::Consume<Options::BoundingFunction>(args, "-bf", [](const string & arg, Options::BoundingFunction & bf){
-        if (arg == "dynamic") bf = BranchAndBoundSolver::Options::BoundingFunction::BASE_DYNAMIC;
-        else if (arg == "continous") bf = BranchAndBoundSolver::Options::BoundingFunction::CONTINOUS;
-        else if (arg == "none") bf = BranchAndBoundSolver::Options::BoundingFunction::NONE;
-        else throw std::invalid_argument(arg + " is not a valid bounding algorithm for branch and bound algorithm");
+        bf = ToBoundingFunction(arg);
     }, this->bounding_function);
 }
 
@@ -209,15 +200,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
             else if ((*it) == "-cd") gs.connection_density = std::stod(*(++it));
 
             // structure to find
-            else if ((*it) == "-structure") {
-                ++it;
-                if (*it == "path") rq.structureToFind = Problem::Requirements::StructureToFind::PATH;
-                else if (*it == "cycle") rq.structureToFind = Problem::Requirements::StructureToFind::CYCLE;
-                else if (*it == "tree") rq.structureToFind = Problem::Requirements::StructureToFind::TREE;
-                else if (*it == "connected") rq.structureToFind = Problem::Requirements::StructureToFind::CONNECTED_GRAPH;
-                else if (*it == "ignore") rq.structureToFind = Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS;
-                else throw std::invalid_argument((*it) + " is not a valid sort method for greedy algorithm");
-            }
+            else if ((*it) == "-structure") rq.structureToFind = ToStructureToFind(*(++it));
 
             // batch or not
             else if ((*it) == "-batch") {

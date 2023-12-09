@@ -217,21 +217,29 @@ bool Solution::IsValid(const PackagedProblem & problem) const{
     return IsFit(problem.problem) && IsStructure(problem);
 }
 
-bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, const int & current, const int & start) const{
+bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, vector<int> _remaining_space, const int & current, const int & start) const{
     for (int next : problem.items[current].connections) {
         if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
+
+            bool fit = true;
+            for (int j = 0; j < _remaining_space.size(); ++j){
+                if (_remaining_space[j] >= problem.items[next].weights[j]) _remaining_space[j] -= problem.items[next].weights[j];
+                else { fit = false; break; }
+            }
+            if (!fit) continue;
+
             visited.push_back(next);
             if (problem.items[next].HasConnectionTo(start)){ // found some cycle lets check if it has all selected vertices
-                bool _found;
+                bool _found = true;
                 for (int i = 0; i < this->selected.size(); ++i){
-                    if (this->selected[i] && std::find(visited.begin(), visited.end(), next) == visited.end()){
+                    if (this->selected[i] && std::find(visited.begin(), visited.end(), i) == visited.end()){
                         _found = false;
                         break;
                     }
                 }
                 if (_found) return true; // it has - cycle found
             }
-            if (IsCyclePossibleDFS(problem, visited, next, start)) return true; // cycle found later
+            if (IsCyclePossibleDFS(problem, visited, _remaining_space, next, start)) return true; // cycle found later
             visited.pop_back();
         }
     }
@@ -240,9 +248,17 @@ bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited
 bool Solution::IsCyclePossible(const Problem & problem) const{
     if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
     vector<int> visited;
+    vector<int> _remaining_space = problem.knapsack_sizes;
     for(int i = 0; i < selected.size(); ++i){
+        bool fit = true;
+        for (int j = 0; j < _remaining_space.size(); ++j){
+            if (_remaining_space[j] >= problem.items[i].weights[j]) _remaining_space[j] -= problem.items[i].weights[j];
+            else { fit = false; break; }
+        } 
+        if (!fit) continue;
+
         visited.push_back(i);
-        if (IsCyclePossibleDFS(problem, visited, i, i)) return true; // cycle found somewhere
+        if (IsCyclePossibleDFS(problem, visited, _remaining_space, i, i)) return true; // cycle found somewhere
         visited.pop_back();
     }
     return false;
@@ -348,9 +364,14 @@ Validation::ValidationStatus Validation::Validate(const Solution & solution, con
     return vs;
 }
 
-int Validation::GoalFunction(const Solution & solution, const PackagedProblem & problem){
+
+
+
+//---------- KNAPSACK SOLVER ----------
+
+int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProblem & problem){
     if (!solution.IsValid(problem)) return INT_MIN;
-    return CalculateMaxValue(solution, problem.problem);
+    return Validation::CalculateMaxValue(solution, problem.problem);
 }
 
 
@@ -362,33 +383,17 @@ PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Option
     PackagedSolution ps;
 
     // fil algorithm info / details
-    ps.algorithm = "brute-force_" + ToString(problem.requirements.structureToFind) + "_";
+    ps.algorithm = "brute-force_";
     if (options.iterative) {
         ps.algorithm += "iterative_";
-
-        switch (options.search_order)
-        {
-        case BruteForceSolver::Options::SearchOrder::ZERO_FIRST:
-            ps.algorithm += "zero-first";
-            break;
-            
-        case BruteForceSolver::Options::SearchOrder::UNCONSTRAINED:
-            ps.algorithm += "unconstrained";
-            break;
-
-        case BruteForceSolver::Options::SearchOrder::ONE_FIRST:
-            ps.algorithm += "one-first";
-            break;
-
-        default:
-            throw std::logic_error("not implemented yet");
-            break;
-        }
+        ps.algorithm += ToString(options.search_order);
     }
     else {
         ps.algorithm += "recursive_";
         ps.algorithm += options.late_fit ? "late-fit" : "early-fit";
     }
+    ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
+    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -417,15 +422,6 @@ PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Option
     else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
-}
-
-Solution BruteForceSolver::Max(const Solution & a, const Solution & b, const PackagedProblem & problem){
-    bool va = a.valid && a.IsStructure(problem);
-    bool vb = b.valid && b.IsStructure(problem);
-    if (va && !vb) return a;
-    if (!va && vb) return b;
-    else if (a.max_value > b.max_value) return a;
-    else return b;
 }
 
 Solution BruteForceSolver::SolutionFromNumber(int num, const Problem & problem) {
@@ -472,6 +468,15 @@ Solution BruteForceSolver::Iterative(const PackagedProblem & problem, const Opti
     }
 
     return global_solution;
+}
+
+Solution BruteForceSolver::Max(const Solution & a, const Solution & b, const PackagedProblem & problem){
+    bool va = a.valid && a.IsStructure(problem);
+    bool vb = b.valid && b.IsStructure(problem);
+    if (va && !vb) return a;
+    if (!va && vb) return b;
+    else if (a.max_value > b.max_value) return a;
+    else return b;
 }
 
 Solution BruteForceSolver::DFS(const PackagedProblem & problem, Solution sol0, const Options::SearchOrder & search_order, const bool & add, const int & depth){
@@ -536,7 +541,10 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
         ps.algorithm += "greedy-sort-by-" + ToString(options.sort_mode);
         break;
     }
+    ps.algorithm += "_";
+    ps.algorithm += options.multi_run ? "multi-run" : "single-run";
     ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
+    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -570,7 +578,7 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
 
     case Problem::Requirements::StructureToFind::PATH:
     {
-        if (true /*multi_run*/){ // ---------- PATH MULTI RUN ----------
+        if (options.multi_run){ // ---------- PATH MULTI RUN ----------
             // Find best starting point
             int startItem = -1;
             for (int currentItemId : sortedItemIds) {
@@ -633,8 +641,10 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
         for (int i = 0; i < isiz; ++i){
             int currentItemId = sortedItemIds[i];
             
-            globalSolution.AddItemIfFits(problem.problem, currentItemId); // if current item fits add it to the current solution
-            if (!globalSolution.IsCyclePossible(problem.problem)) globalSolution.RemoveItem(problem.problem, currentItemId); // if adding it would make it impossible to construct a valid answer then remove it
+            if (globalSolution.Fits(problem.problem, currentItemId)){
+                globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
+                if (!globalSolution.IsCyclePossible(problem.problem)) globalSolution.RemoveItem(problem.problem, currentItemId); // if adding it would make it impossible to construct a valid answer then remove it
+            }
         }
         break;
     }
@@ -692,9 +702,12 @@ Solution GreedySolver::GreedyPath(const Problem & problem, const Options & optio
 //---------- BRANCH AND BOUND SOLVER ----------
 
 PackagedSolution BranchAndBoundSolver::Solve(PackagedProblem & problem, const Options & options){
+    if (problem.requirements.structureToFind != Problem::Requirements::StructureToFind::PATH)
+        throw std::logic_error("branch and bound does not support structures other than path");
     PackagedSolution ps;
     std::chrono::steady_clock::time_point start, end;
     ps.algorithm = "branch-and-bound_" + ToString(problem.requirements.structureToFind);
+    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
 
     // solve with measured time
     if (options.late_fit){
@@ -980,4 +993,72 @@ Solution FloydSolver::Connected(const Problem & problem){
     }
 
     return d[maxi][maxj];
+}
+
+
+
+//---------- ENUMS ----------
+
+std::string ToString(const knapsack_solver::BruteForceSolver::Options::SearchOrder & so){
+    switch (so)
+    {
+    case BruteForceSolver::Options::SearchOrder::ZERO_FIRST:
+        return "zero-first";
+        break;
+    case BruteForceSolver::Options::SearchOrder::ONE_FIRST:
+        return "one-first";
+        break;
+    case BruteForceSolver::Options::SearchOrder::UNCONSTRAINED:
+        return "unconstrained";
+        break;
+    case BruteForceSolver::Options::SearchOrder::GRAY_CODE:
+        return "gray-code";
+        break;   
+    case BruteForceSolver::Options::SearchOrder::RANDOM:
+        return "random";
+        break;   
+    default:
+        throw std::invalid_argument("unrecognised value");
+        break;
+    }
+
+}
+std::string ToString(const knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction & bf){
+    switch (bf)
+    {
+    case BranchAndBoundSolver::Options::BoundingFunction::NONE:
+        return "none";
+        break;
+    case BranchAndBoundSolver::Options::BoundingFunction::BASE_DYNAMIC:
+        return "dynamic";
+        break;
+    case BranchAndBoundSolver::Options::BoundingFunction::CONTINOUS:
+        return "continous";
+        break;    
+    default:
+        throw std::invalid_argument("unrecognised value");
+        break;
+    }
+}
+
+knapsack_solver::BruteForceSolver::Options::SearchOrder ToSearchOrder(const std::string & str){
+    if (str == "zero-first") return BruteForceSolver::Options::SearchOrder::ZERO_FIRST;
+    else if (str == "one-first") return BruteForceSolver::Options::SearchOrder::ONE_FIRST;
+    else if (str == "unconstrained") return BruteForceSolver::Options::SearchOrder::UNCONSTRAINED;
+    else if (str == "gray-code") return BruteForceSolver::Options::SearchOrder::GRAY_CODE;
+    else if (str == "random") return BruteForceSolver::Options::SearchOrder::RANDOM;
+    else throw std::invalid_argument("unrecognised value");
+}
+knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction ToBoundingFunction(const std::string & str){
+    if (str == "none") return BranchAndBoundSolver::Options::BoundingFunction::NONE;
+    else if (str == "dynamic") return BranchAndBoundSolver::Options::BoundingFunction::BASE_DYNAMIC;
+    else if (str == "continous") return BranchAndBoundSolver::Options::BoundingFunction::CONTINOUS;
+    else throw std::invalid_argument("unrecognised value");
+}
+
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::BruteForceSolver::Options::SearchOrder & so){
+    return os << ToString(so);
+}
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction & bf){
+    return os << ToString(bf);
 }

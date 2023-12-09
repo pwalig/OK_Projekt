@@ -397,6 +397,39 @@ string ToString(const knapsack_solver::Problem::SortMode & sm){
     }
 }
 
+knapsack_solver::Problem::CycleGuarantee ToCycleGuarantee(const std::string & str){
+    if (str == "contains-cycle") return Problem::CycleGuarantee::CONTAINS_CYCLE;
+    else if (str == "no-cycle") return Problem::CycleGuarantee::NO_CYCLE;
+    else if (str == "no-guarantees") return Problem::CycleGuarantee::NO_GUARANTEES;
+    else throw std::invalid_argument("unrecognised value");
+
+}
+knapsack_solver::Problem::Requirements::StructureToFind ToStructureToFind(const std::string & str){
+    if (str == "cycle") return Problem::Requirements::StructureToFind::CYCLE;
+    else if (str == "path") return Problem::Requirements::StructureToFind::PATH;
+    else if (str == "tree") return Problem::Requirements::StructureToFind::TREE;
+    else if (str == "connected-graph") return Problem::Requirements::StructureToFind::CONNECTED_GRAPH;
+    else if (str == "ignore-connections") return Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS;
+    else throw std::invalid_argument("unrecognised value");
+
+}
+knapsack_solver::Problem::Requirements::WeightTreatment ToWeightTreatment(const std::string & str){
+    if (str == "ignore-all") return Problem::Requirements::WeightTreatment::IGNORE_ALL;
+    else if (str == "respect-all") return Problem::Requirements::WeightTreatment::RESPECT_ALL;
+    else if (str == "respect-first_only") return Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY;
+    else if (str == "set-all-to-1") return Problem::Requirements::WeightTreatment::SET_ALL_TO_1;
+    else throw std::invalid_argument("unrecognised value");
+
+}
+knapsack_solver::Problem::SortMode ToSortMode(const std::string & str){
+    if (str == "value/weight") return Problem::SortMode::VALUE_WEIGHT_RATIO;
+    else if (str == "value") return Problem::SortMode::VALUE;
+    else if (str == "weight") return Problem::SortMode::WEIGHT;
+    else if (str == "random") return Problem::SortMode::RANDOM;
+    else if (str == "dont-sort") return Problem::SortMode::DONT_SORT;
+    else throw std::invalid_argument("unrecognised value");
+}
+
 std::ostream& operator<<(std::ostream & os, const Problem::CycleGuarantee & cg){
     return os << ToString(cg);
 }
@@ -405,4 +438,7 @@ std::ostream& operator<<(std::ostream & os, const Problem::Requirements::Structu
 }
 std::ostream& operator<<(std::ostream & os, const Problem::Requirements::WeightTreatment & wt){
     return os << ToString(wt);
+}
+std::ostream& operator<<(std::ostream & os, const Problem::SortMode & sm){
+    return os << ToString(sm);
 }

@@ -108,3 +108,8 @@ std::string ToString(const knapsack_solver::Problem::CycleGuarantee & cg);
 std::string ToString(const knapsack_solver::Problem::Requirements::StructureToFind & stf);
 std::string ToString(const knapsack_solver::Problem::Requirements::WeightTreatment & wt);
 std::string ToString(const knapsack_solver::Problem::SortMode & sm);
+
+knapsack_solver::Problem::CycleGuarantee ToCycleGuarantee(const std::string & str);
+knapsack_solver::Problem::Requirements::StructureToFind ToStructureToFind(const std::string & str);
+knapsack_solver::Problem::Requirements::WeightTreatment ToWeightTreatment(const std::string & str);
+knapsack_solver::Problem::SortMode ToSortMode(const std::string & str);

@@ -19,7 +19,7 @@ namespace knapsack_solver {
 class Solution {
     bool IsPathDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & length) const;
     bool IsCycleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start, const int & length) const;
-    bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start) const;
+    bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, std::vector<int> _remaining_space, const int & current, const int & start) const;
 
     public:
     int max_value;
@@ -70,7 +70,6 @@ class Validation{
     static std::vector<int> CalculateRemainingSpaces(const Solution & solution, const Problem & problem);
     static int CalculateMaxValue(const Solution & solution, const Problem & problem);
     static ValidationStatus Validate(const Solution & solution, const PackagedProblem & problem);
-    static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
 };
 
 
@@ -84,6 +83,13 @@ class PackagedSolution {
         Validation::ValidationStatus validation_status;
     
     void ExportJSON(const std::string file_name) const;
+};
+
+
+
+class KnapsackSolver {
+    public:
+    static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
 };
 
 
@@ -127,7 +133,7 @@ class BranchAndBoundSolver{
 
     public:
     struct Options{
-        enum class BoundingFunction { NONE, CONTINOUS, ACYCLIC, BASE_DYNAMIC };
+        enum class BoundingFunction { NONE, CONTINOUS, BASE_DYNAMIC };
         BoundingFunction bounding_function = BoundingFunction::NONE;
         bool late_fit = false;
         Options() = default;
@@ -148,7 +154,7 @@ class GreedySolver{
     GreedySolver() = delete;
     struct Options{
         Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
-        int buffor = 1;
+        bool multi_run = true;
         Options() = default;
         explicit Options(std::vector<std::string> & args);
     };
@@ -205,5 +211,12 @@ inline void BatchSolve(const std::string & directory_path, const typename T::Opt
 
 
 std::ostream& operator<<(std::ostream& os, const knapsack_solver::Solution& s);
-
 std::ostream& operator<<(std::ostream& os, const knapsack_solver::PackagedSolution& ps);
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::BruteForceSolver::Options::SearchOrder & so);
+std::ostream& operator<<(std::ostream & os, const knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction & bf);
+
+std::string ToString(const knapsack_solver::BruteForceSolver::Options::SearchOrder & so);
+std::string ToString(const knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction & bf);
+
+knapsack_solver::BruteForceSolver::Options::SearchOrder ToSearchOrder(const std::string & str);
+knapsack_solver::BranchAndBoundSolver::Options::BoundingFunction ToBoundingFunction(const std::string & str);
