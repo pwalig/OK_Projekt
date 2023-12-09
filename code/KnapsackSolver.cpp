@@ -4,6 +4,7 @@
     //#include <fstream> // std::ifstream
     //#include <vector>
     //#include <string>
+    //#include <cfloat> // DBL_MAX
 
     //Batch Solve requires these three:
     //#include <filesystem> // std::filesystem::create_directory
@@ -15,10 +16,10 @@
 #include <chrono>
 #include <fstream> // std::ofstream
 #include <stdexcept> // throw error types
-#include <cfloat> // DBL_MAX
 
 using namespace knapsack_solver;
 using std::vector;
+using std::string;
 using std::ostream;
 using std::cout;
 using std::endl;
@@ -379,23 +380,102 @@ int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProble
 
 
 
+//---------- DYNAMIC SOLVER ----------
+
+bool DynamicSolver::expect_perfection = true;
+
+string DynamicSolver::GetAlgorithmName(const Options & options){
+    string name = "dynamic-programming";
+    return name;
+}
+
+PackagedSolution DynamicSolver::Solve(PackagedProblem & problem, const Options & options){
+    if (problem.requirements.weightTreatment != Problem::Requirements::WeightTreatment::RESPECT_FIRST_ONLY && problem.problem.knapsack_sizes.size() > 1)
+        throw std::invalid_argument("dynamic programming can't solve for multiple weights");
+    if (problem.requirements.structureToFind != Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS)
+        throw std::invalid_argument("dynamic programming can't solve for required structure");
+    
+    PackagedSolution ps;
+    
+    // run with time measure
+    std::chrono::steady_clock::time_point start, end;
+    start = std::chrono::steady_clock::now();
+    ps.solution = Dynamic(problem.problem);
+    end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double> elapsed_seconds{end - start};
+    ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
+
+    return ps;
+}
+
+Solution DynamicSolver::Dynamic(const Problem & problem){
+
+    // Solution
+    int isiz = problem.items.size();
+    vector<vector<int>> dp(isiz+1, vector<int>(problem.knapsack_sizes[0]+1, 0)); // initialise dynamic programming 2D NxP array with zeros
+    for (int i = 1; i <= isiz; ++i){
+        for (int j = 1; j <= problem.knapsack_sizes[0]; ++j){
+            if (problem.items[i-1].weights[0] <= j)
+                dp[i][j] = std::max(problem.items[i-1].value + dp[i-1][j - problem.items[i-1].weights[0]], dp[i-1][j]);
+            else
+                dp[i][j] = dp[i-1][j];
+        }
+    }
+
+    // Back tracking
+    Solution s(isiz, problem.knapsack_sizes);
+    int res = dp[isiz][problem.knapsack_sizes[0]];
+
+    int w = problem.knapsack_sizes[0];
+    for (int i = isiz; i > 0 && res > 0; i--) {
+         
+        // either the result comes from the top
+        // (K[i-1][w]) or from (val[i-1] + K[i-1]
+        // [w-wt[i-1]]) as in Knapsack table. If
+        // it comes from the latter one/ it means
+        // the item is included.
+        if (res == dp[i - 1][w])
+            continue;    
+        else {
+            // This item is included.
+            s.AddItem(problem, i-1);
+             
+            // Since this weight is included its
+            // value is deducted
+            res -= problem.items[i - 1].value;
+            w -= problem.items[i - 1].weights[0];
+        }
+    }
+#ifdef KSS_DEVELOPMENT
+    if (s.max_value != dp[isiz][problem.knapsack_sizes[0]])
+        throw std::logic_error("back tracking went wrong! Got: " + std::to_string(s.max_value) + ", expected: " + std::to_string(dp[isiz][problem.knapsack_sizes[0]]));
+#endif
+
+    return s;
+}
+
+
+
+
 //---------- BRUTE FORCE SOLVER ----------
+
+bool BruteForceSolver::expect_perfection = true;
+
+string BruteForceSolver::GetAlgorithmName(const Options & options){
+    string name = "brute-force_";
+    if (options.iterative) {
+        name += "iterative_";
+        name += ToString(options.search_order);
+    }
+    else {
+        name += "recursive_";
+        name += options.late_fit ? "late-fit" : "early-fit";
+    }
+    return name;
+}
 
 PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Options options){    
     PackagedSolution ps;
-
-    // fil algorithm info / details
-    ps.algorithm = "brute-force_";
-    if (options.iterative) {
-        ps.algorithm += "iterative_";
-        ps.algorithm += ToString(options.search_order);
-    }
-    else {
-        ps.algorithm += "recursive_";
-        ps.algorithm += options.late_fit ? "late-fit" : "early-fit";
-    }
-    ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
-    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -411,21 +491,6 @@ PackagedSolution BruteForceSolver::Solve(PackagedProblem & problem, const Option
     }
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-
-    // validate
-    ps.validation_status = Validation::Validate(ps.solution, problem);
-    if (ps.solution.max_value < problem.known_optimum) {
-        ps.validation_status.quality = false;
-        ps.validation_status.valid = false;
-    }
-
-    // optimum update
-    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
-        problem.known_optimum = ps.solution.max_value;
-        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
-    }
-    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
-    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }
@@ -528,29 +593,31 @@ Solution BruteForceSolver::Recursive(const PackagedProblem & problem, const Opti
 
 //---------- GREEDY SOLVER ----------
 
-PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & options){
-    PackagedSolution ps;
+bool GreedySolver::expect_perfection = false;
 
-    // fill algorithm info / details
-    ps.algorithm = "";
+string GreedySolver::GetAlgorithmName(const Options & options){
+    string name = "";
     switch (options.sort_mode)
     {
     case Problem::SortMode::RANDOM:
-        ps.algorithm += "random-fit";
+        name += "random-fit";
         break;
     
     case Problem::SortMode::DONT_SORT:
-        ps.algorithm += "first-fit";
+        name += "first-fit";
         break;
 
     default:
-        ps.algorithm += "greedy-sort-by-" + ToString(options.sort_mode);
+        name += "greedy-sort-by-" + ToString(options.sort_mode);
         break;
     }
-    ps.algorithm += "_";
-    ps.algorithm += options.multi_run ? "multi-run" : "single-run";
-    ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
-    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
+    name += "_";
+    name += options.multi_run ? "multi-run" : "single-run";
+    return name;
+}
+
+PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & options){
+    PackagedSolution ps;
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -559,17 +626,6 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
     end = std::chrono::steady_clock::now();
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-
-    // validate
-    ps.validation_status = Validation::Validate(ps.solution, problem);
-
-    // optimum update
-    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
-        problem.known_optimum = ps.solution.max_value;
-        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
-    }
-    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
-    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }
@@ -707,44 +763,35 @@ Solution GreedySolver::GreedyPath(const Problem & problem, const Options & optio
 
 //---------- BRANCH AND BOUND SOLVER ----------
 
+bool BranchAndBoundSolver::expect_perfection = true;
+
+string BranchAndBoundSolver::GetAlgorithmName(const Options & options){
+    string name = "branch-and-bound_";
+    if (options.late_fit) name += "late-fit";
+    else name += "early-fit";
+    return name;
+}
+
 PackagedSolution BranchAndBoundSolver::Solve(PackagedProblem & problem, const Options & options){
     if (problem.requirements.structureToFind != Problem::Requirements::StructureToFind::PATH)
         throw std::logic_error("branch and bound does not support structures other than path");
+
     PackagedSolution ps;
-    std::chrono::steady_clock::time_point start, end;
-    ps.algorithm = "branch-and-bound_" + ToString(problem.requirements.structureToFind);
-    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
 
     // solve with measured time
+    std::chrono::steady_clock::time_point start, end;
     if (options.late_fit){
-        ps.algorithm += "_late-fit";
         start = std::chrono::steady_clock::now();
         ps.solution = BnBLateFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
     }
     else{
-        ps.algorithm += "_early-fit";
         start = std::chrono::steady_clock::now();
         ps.solution = BnBEarlyFitPath(problem.problem);
         end = std::chrono::steady_clock::now();
     }
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
-
-    // validate
-    ps.validation_status = Validation::Validate(ps.solution, problem);
-    if (ps.solution.max_value < problem.known_optimum) {
-        ps.validation_status.quality = false;
-        ps.validation_status.valid = false;
-    }
-
-    // optimum update
-    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
-        problem.known_optimum = ps.solution.max_value;
-        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
-    }
-    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
-    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
 
     return ps;
 }

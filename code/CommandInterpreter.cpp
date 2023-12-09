@@ -97,6 +97,7 @@ BranchAndBoundSolver::Options::Options(std::vector<std::string> & args) : Option
     }, this->bounding_function);
 }
 
+DynamicSolver::Options::Options(std::vector<std::string> & args) : Options(){}
 
 // ---------- COMMAND INTERPRETING ----------
 
@@ -114,6 +115,12 @@ PackagedSolution CommandInterpreter::SolveFromArgs(std::vector<std::string> & ar
     Consume<PackagedProblem>(args, "-structure", [](const string & arg, PackagedProblem & _p_p){
         if (_p_p.requirements.structureToFind == ToStructureToFind(arg)) return;
         _p_p.requirements.structureToFind = ToStructureToFind(arg);
+        _p_p.associated_file = "";
+        _p_p.known_optimum = -1;
+    }, pp);
+    Consume<PackagedProblem>(args, "-weight-treatment", [](const string & arg, PackagedProblem & _p_p){
+        if (_p_p.requirements.weightTreatment == ToWeightTreatment(arg)) return;
+        _p_p.requirements.weightTreatment = ToWeightTreatment(arg);
         _p_p.associated_file = "";
         _p_p.known_optimum = -1;
     }, pp);
@@ -163,6 +170,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         if (algorithm == "greedy") ps = SolveFromArgs<GreedySolver>(args);
         else if (algorithm == "brute-force") ps = SolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") ps = SolveFromArgs<BranchAndBoundSolver>(args);
+        else if (algorithm == "dynamic-programming") ps = SolveFromArgs<DynamicSolver>(args);
         else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
             
         if (print) cout << ps;
@@ -175,6 +183,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         if (algorithm == "greedy") BatchSolveFromArgs<GreedySolver>(args);
         else if (algorithm == "brute-force") BatchSolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") BatchSolveFromArgs<BranchAndBoundSolver>(args);
+        else if (algorithm == "dynamic-programming") BatchSolveFromArgs<DynamicSolver>(args);
         else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
         break;
     }
@@ -207,6 +216,8 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
 
             // structure to find
             else if ((*it) == "-structure") rq.structureToFind = ToStructureToFind(*(++it));
+            // weight treatment
+            else if ((*it) == "-weight-treatment") rq.weightTreatment = ToWeightTreatment(*(++it));
 
             // batch or not
             else if ((*it) == "-batch") {

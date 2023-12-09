@@ -7,10 +7,10 @@ project in development
 - Brute Force Methods
 - Primitive Branch and Bound Methods
 - Greedy algorithms
+- Dynamic Programming
 - measure calculation time
 - json format support
 ### To Do
-- Dynamic Programming
 - Heuristics
 - Multi threading
 - GPU support

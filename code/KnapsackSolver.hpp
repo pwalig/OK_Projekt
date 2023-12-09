@@ -4,6 +4,7 @@
 #include <fstream> // std::ifstream
 #include <vector>
 #include <string>
+#include <cfloat> // DBL_MAX
 
 // Batch Solve requires these three:
 #include <filesystem> // std::filesystem::create_directory, std::filesystem::remove_all
@@ -94,6 +95,23 @@ class KnapsackSolver {
 
 
 
+class DynamicSolver{
+    public:
+    DynamicSolver() = delete;
+    struct Options{
+
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
+    };
+    static Solution Dynamic(const Problem & problem);
+
+    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
+};
+
+
+
 class BruteForceSolver{
     public:
     BruteForceSolver() = delete;
@@ -114,11 +132,12 @@ class BruteForceSolver{
     static Solution DFS(const PackagedProblem & problem, Solution currentSolution, const Options::SearchOrder & search_order, const bool & add, const int & depth);
 
     public:
-    static PackagedSolution Solve(PackagedProblem & problem, const Options options);
-    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
-    
     static Solution Iterative(const PackagedProblem & problem, const Options::SearchOrder & search_order);
     static Solution Recursive(const PackagedProblem & problem, const Options & options);
+
+    static PackagedSolution Solve(PackagedProblem & problem, const Options options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
 };
 
 
@@ -144,7 +163,8 @@ class BranchAndBoundSolver{
     static Solution BnBEarlyFitPath(const Problem & problem);
 
     static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
-    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
 };
 
 
@@ -159,12 +179,13 @@ class GreedySolver{
         explicit Options(std::vector<std::string> & args);
     };
 
-    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
-    static std::string GetAlgorithmName(const PackagedProblem & problem, const Options & options);
-
     static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
     static Solution GreedyIgnoreConnections(const Problem & problem, const Options & options);
     static Solution GreedyPath(const Problem & problem, const Options & options);
+
+    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
 };
 
 
@@ -180,7 +201,28 @@ class FloydSolver{
 
 template <typename T>
 inline PackagedSolution Solve(PackagedProblem & problem, const typename T::Options & options){
-    return T::Solve(problem, options);
+    PackagedSolution ps = T::Solve(problem, options);
+
+    // fill algorithm info / details
+    ps.algorithm = T::GetAlgorithmName(options);
+    ps.algorithm += "_" + ToString(problem.requirements.structureToFind);
+    ps.algorithm += "_" + ToString(problem.requirements.weightTreatment);
+    
+    // validate
+    ps.validation_status = Validation::Validate(ps.solution, problem);
+    if (T::expect_perfection && ps.solution.max_value < problem.known_optimum) {
+        ps.validation_status.quality = false;
+        ps.validation_status.valid = false;
+    }
+
+    // optimum update
+    if (ps.validation_status.undergone && ps.validation_status.valid && ps.solution.max_value > problem.known_optimum){
+        problem.known_optimum = ps.solution.max_value;
+        if (problem.associated_file != "") problem.ExportJSON(problem.associated_file);
+    }
+    if (ps.solution.max_value == 0) ps.quality = problem.known_optimum == 0.0 ? 1.0 : DBL_MAX;
+    else ps.quality = static_cast<double>(problem.known_optimum) / static_cast<double>(ps.solution.max_value);
+    return ps;
 }
 
 

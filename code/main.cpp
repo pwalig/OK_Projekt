@@ -3,8 +3,6 @@
 
 #include "CommandInterpreter.hpp"
 
-#define KSS_DEVELOPMENT
-
 using namespace knapsack_solver; // knapsack_solver::CommandInterpreter
 
 int main(int argc, char * argv[]) {

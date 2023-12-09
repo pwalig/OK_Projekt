@@ -1,4 +1,6 @@
 *
+!.gitignore
+!README.md
 !code/
 !code/*.cpp
 !code/*.hpp

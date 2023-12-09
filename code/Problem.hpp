@@ -3,6 +3,7 @@
 #include <iostream> // std::ostream
 #include <vector>
 #include <string>
+#include "DebugDefines.hpp"
 
 
 namespace knapsack_solver{
