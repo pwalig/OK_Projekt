@@ -59,9 +59,20 @@ std::string CommandInterpreter::Consume(std::vector<std::string> & args, const i
 
 GreedySolver::Options::Options(std::vector<std::string> & args){
     // multi-run / single-run
-    CommandInterpreter::Consume<bool>(args, "-single-run", [](const string & arg, bool & sr){
+    CommandInterpreter::Consume<bool>(args, "-single-run", [](bool & sr){
         sr = false;
     }, this->multi_run);
+    // sort method
+    CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
+        sm = ToSortMode(arg);
+    }, this->sort_mode);
+}
+
+GreedyHeuristicSearchSolver::Options::Options(std::vector<std::string> & args){
+    // multi-run / single-run
+    CommandInterpreter::Consume<double>(args, "-coverage", [](const string & arg, double & _coverage){
+        _coverage = std::stod(arg);
+    }, this->coverage);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
         sm = ToSortMode(arg);
@@ -73,10 +84,16 @@ BruteForceSolver::Options::Options(std::vector<std::string> & args) : Options(){
     CommandInterpreter::Consume<bool>(args, "-recursive", [](bool & b){
         b = false;
     }, this->iterative);
+    CommandInterpreter::Consume<bool>(args, "-iterative", [](bool & b){
+        if (b == false) throw std::invalid_argument("tried to use -recursive and -iterative simultaneously");
+    }, this->iterative);
 
     // late fit / early fit
     CommandInterpreter::Consume<bool>(args, "-early", [](bool & b){
         b = false;
+    }, this->late_fit);
+    CommandInterpreter::Consume<bool>(args, "-late", [](bool & b){
+        if (b == false) throw std::invalid_argument("tried to use -early and -late simultaneously");
     }, this->late_fit);
 
     // search order
@@ -89,6 +106,9 @@ BranchAndBoundSolver::Options::Options(std::vector<std::string> & args) : Option
     // late fit / early fit
     CommandInterpreter::Consume<bool>(args, "-early", [](bool & b){
         b = false;
+    }, this->late_fit);
+    CommandInterpreter::Consume<bool>(args, "-late", [](bool & b){
+        if (b == false) throw std::invalid_argument("tried to use -early and -late simultaneously");
     }, this->late_fit);
 
     // bounding function
@@ -168,6 +188,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         PackagedSolution ps;
         string algorithm = Consume(args, 1);
         if (algorithm == "greedy") ps = SolveFromArgs<GreedySolver>(args);
+        else if (algorithm == "greedy-heuristic-search") ps = SolveFromArgs<GreedyHeuristicSearchSolver>(args);
         else if (algorithm == "brute-force") ps = SolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") ps = SolveFromArgs<BranchAndBoundSolver>(args);
         else if (algorithm == "dynamic-programming") ps = SolveFromArgs<DynamicSolver>(args);
@@ -181,6 +202,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
     case Command::BATCH_SOLVE:{
         string algorithm = Consume(args, 1);
         if (algorithm == "greedy") BatchSolveFromArgs<GreedySolver>(args);
+        else if (algorithm == "greedy-heuristic-search") BatchSolveFromArgs<GreedyHeuristicSearchSolver>(args);
         else if (algorithm == "brute-force") BatchSolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") BatchSolveFromArgs<BranchAndBoundSolver>(args);
         else if (algorithm == "dynamic-programming") BatchSolveFromArgs<DynamicSolver>(args);

@@ -330,10 +330,10 @@ ostream& operator<<(ostream& os, const PackagedSolution& ps){
 
 //---------- VALIDATION ----------
 
-vector<int> Validation::CalculateRemainingSpaces(const Solution & solution, const Problem & problem){
+vector<int> Validation::CalculateRemainingSpaces(const std::vector<bool> & selected, const Problem & problem){
     vector<int> remainigSpaces = problem.knapsack_sizes;
-    for (int i = 0; i < solution.selected.size(); ++i){
-        if (solution.selected[i]) {
+    for (int i = 0; i < selected.size(); ++i){
+        if (selected[i]) {
             for (int j = 0; j < remainigSpaces.size(); ++j){
                 remainigSpaces[j] -= problem.items[i].weights[j];
             }
@@ -342,19 +342,19 @@ vector<int> Validation::CalculateRemainingSpaces(const Solution & solution, cons
     return remainigSpaces;
 }
 
-int Validation::CalculateMaxValue(const Solution & solution, const Problem & problem){
-    if (solution.selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not mathch");
+int Validation::CalculateMaxValue(const std::vector<bool> & selected, const Problem & problem){
+    if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not mathch");
     int sum = 0;
-    for (int i = 0; i < solution.selected.size(); ++i){
-        if (solution.selected[i]) sum += problem.items[i].value;
+    for (int i = 0; i < selected.size(); ++i){
+        if (selected[i]) sum += problem.items[i].value;
     }
     return sum;
 }
 
 Validation::ValidationStatus Validation::Validate(const Solution & solution, const PackagedProblem & problem){
     ValidationStatus vs;
-    if (solution.max_value != CalculateMaxValue(solution, problem.problem)) vs.value = false; // solution calculated its value wrong
-    vector<int> calculatedRemainingSpace = CalculateRemainingSpaces(solution, problem.problem);
+    if (solution.max_value != CalculateMaxValue(solution.selected, problem.problem)) vs.value = false; // solution calculated its value wrong
+    vector<int> calculatedRemainingSpace = CalculateRemainingSpaces(solution.selected, problem.problem);
     if (solution.remainingSpace != calculatedRemainingSpace) vs.remaining_space = false; // solution calculated its remaining space wrong
     for (int weight : calculatedRemainingSpace) if (weight < 0) vs.fit = false; // items dont fit
 
@@ -374,7 +374,7 @@ Validation::ValidationStatus Validation::Validate(const Solution & solution, con
 
 int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProblem & problem){
     if (!solution.IsValid(problem)) return INT_MIN;
-    return Validation::CalculateMaxValue(solution, problem.problem);
+    return Validation::CalculateMaxValue(solution.selected, problem.problem);
 }
 
 
@@ -558,8 +558,7 @@ Solution BruteForceSolver::DFS(const PackagedProblem & problem, Solution sol0, c
 }
 
 Solution BruteForceSolver::DFS(const PackagedProblem & problem, Solution sol0, const Options::SearchOrder & search_order, const int & depth){
-    int isiz = problem.problem.items.size();
-    if (depth == isiz) return sol0;
+    if (depth == problem.problem.items.size()) return sol0;
     
     Solution sol1 = sol0;
     sol0 = DFS(problem, sol0, search_order, depth + 1);
@@ -796,32 +795,36 @@ PackagedSolution BranchAndBoundSolver::Solve(PackagedProblem & problem, const Op
     return ps;
 }
 
-//----------Bounding Functions----------
-
-int BranchAndBoundSolver::GreedyIgnoreConnections(const Problem & problem, const Problem::SortMode & sortMode, Solution currentSolution){
-    int isiz = problem.items.size();
-    vector<int> sortedItemIds = problem.GetSortedItemIds(sortMode);
-
-    for (int i = 0; i < isiz; ++i){
-        int currentItemId = sortedItemIds[i];
-
-        if (currentSolution.selected[currentItemId]) continue; // don't add items that were already in the solution
-
-        currentSolution.AddItemIfFits(problem, currentItemId);
+/*
+Solution BranchAndBoundSolver::DFS(const PackagedProblem & problem, Solution sol0, const bool & add, const int & depth, int lower_bound, const Options & options){
+    if (add){
+        if (!sol0.Fits(problem.problem, depth)) return sol0;
+        sol0.AddItem(problem.problem, depth);
     }
+    if (depth == problem.problem.items.size() - 1) return sol0; // just added (or not) last item return what we have there will be no further DFS calls
 
-    return currentSolution.max_value;
-}
+    int up = options.upper_bound(problem.problem, sol0); // we just added an item (or not) to the solution what is possible theoretically to find in this barnch
+    if (up <= lower_bound) return sol0; // if we cant get more than what we found already (or know we can find elsewhere) dont chceck further
+
+    Solution sol1 = DFS(problem, sol0, true, depth + 1, options.lower_bound(problem.problem, sol0), options);
+    lower_bound = std::max(lower_bound, options.lower_bound(problem.problem, sol1)); // what can we find goind sol1 route
+
+    if (up <= lower_bound) return sol1; // if we cant match that 
+    Solution sol2 = DFS(problem, sol0, false, depth + 1, options.lower_bound(problem.problem, sol0), options);
+
+    if (sol1.max_value > sol2.max_value) return sol1;
+    return sol2;
+}*/
 
 //---------- Early Fit ----------
 
-Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId, int lower_bound) {
+Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId) {
 
 #ifdef DEBUG_BNB
     cout << "check for " << currentItemId << ", remaining weight: "<< remainingSpace[0] << endl;
 #endif
 
-    Solution globalSolution = currentSolution;
+    Solution globalSolution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
 
     // construct solution further with recursive DFSLateFitPath calls
     for (int nextItemId : problem.items[currentItemId].connections){
@@ -832,11 +835,8 @@ Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution
 
             tempSolution.AddItem(problem, nextItemId);
             if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, tempSolution, remainingSpace) > lower_bound*/) {
-                tempSolution = DFSEarlyFitPath(problem, tempSolution, nextItemId, lower_bound);
-                if (tempSolution.max_value > globalSolution.max_value) {
-                    globalSolution = tempSolution;
-                    lower_bound = tempSolution.max_value;
-                }
+                tempSolution = DFSEarlyFitPath(problem, tempSolution, nextItemId);
+                if (tempSolution.max_value > globalSolution.max_value)  globalSolution = tempSolution;
             }
         }
     }
@@ -858,7 +858,7 @@ Solution BranchAndBoundSolver::BnBEarlyFitPath(const Problem & problem) {
             Solution currentSolution(isiz, problem.knapsack_sizes); // create empty solution
             currentSolution.AddItem(problem, i);
             if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, currentSolution, remainingSpace) > globalSolution.max_value*/){
-                currentSolution = DFSEarlyFitPath(problem, currentSolution, i, globalSolution.max_value);
+                currentSolution = DFSEarlyFitPath(problem, currentSolution, i);
                 if(currentSolution.max_value > globalSolution.max_value) globalSolution = currentSolution; // if newly found solution is better use it as you global solution
             }
         }
@@ -879,7 +879,7 @@ Solution BranchAndBoundSolver::DFSLateFitPath(const Problem & problem, Solution 
 #endif
 
     
-    Solution globalSolution(problem.items.size(), problem.knapsack_sizes); // create empty solution
+    Solution globalSolution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
 
     // construct solution further with recursive DFSLateFitPath calls
     for (int nextItemId : problem.items[currentItemId].connections){
@@ -908,6 +908,128 @@ Solution BranchAndBoundSolver::BnBLateFitPath(const Problem & problem) {
     }
 
     return globalSolution;
+}
+
+
+
+
+//---------- GREEDY HEURISTIC SEARCH SOLVER ----------
+
+bool GreedyHeuristicSearchSolver::expect_perfection = false;
+
+string GreedyHeuristicSearchSolver::GetAlgorithmName(const Options & options){
+    string name = "greedy-heuristic-search-sort-by-" + ToString(options.sort_mode);
+    name += "_coverage-" + std::to_string(options.coverage);
+    return name;
+}
+
+PackagedSolution GreedyHeuristicSearchSolver::Solve(PackagedProblem & problem, const Options & options){
+    PackagedSolution ps;
+    
+    // run with time measure
+    std::chrono::steady_clock::time_point start, end;
+    switch (problem.requirements.structureToFind) {
+
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS: {
+        start = std::chrono::steady_clock::now();
+        ps.solution = IgnoreConnectionsDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
+        end = std::chrono::steady_clock::now();
+        break;
+    }
+    case Problem::Requirements::StructureToFind::PATH: {
+        start = std::chrono::steady_clock::now();
+        ps.solution = PathDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), -1, problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
+        end = std::chrono::steady_clock::now();
+        break;
+    }
+    case Problem::Requirements::StructureToFind::CYCLE: {
+        start = std::chrono::steady_clock::now();
+        ps.solution = CycleDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), -1, -1, problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
+        end = std::chrono::steady_clock::now();
+        break;
+    }
+    
+    default: {
+        throw std::logic_error("not implemented yet");
+        break;
+    }
+    }
+
+    const std::chrono::duration<double> elapsed_seconds{end - start};
+    ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
+
+    return ps;
+}
+
+Solution GreedyHeuristicSearchSolver::PathDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+    Solution global_solution(current_solution);
+    int counted_visits = 0;
+    int total_visits = 0;
+    while (counted_visits < amount_to_visit && total_visits < sorted_item_ids.size()) {
+        ++total_visits;
+
+        int current_item_id = sorted_item_ids[total_visits-1];
+        if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
+        if (previous_item_id >= 0 && !problem.problem.items[previous_item_id].HasConnectionTo(current_item_id)) continue;
+        if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
+
+        Solution temp_solution(current_solution);
+        temp_solution.AddItem(problem.problem, current_item_id);
+        vector<int> new_sorted_item_ids(sorted_item_ids);
+        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
+        temp_solution = PathDFS(problem, temp_solution, current_item_id, new_sorted_item_ids, amount_to_visit);
+        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+
+        ++counted_visits;
+    }
+    return global_solution;
+}
+
+Solution GreedyHeuristicSearchSolver::CycleDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const int & start_item_id, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+    Solution global_solution(current_solution);
+    int counted_visits = 0;
+    int total_visits = 0;
+    while (counted_visits < amount_to_visit && total_visits < sorted_item_ids.size()) {
+        ++total_visits;
+
+        int current_item_id = sorted_item_ids[total_visits-1];
+        if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
+        if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
+
+        Solution temp_solution(current_solution);
+        temp_solution.AddItem(problem.problem, current_item_id);
+        if (!temp_solution.IsCyclePossible(problem.problem)) continue;
+        vector<int> new_sorted_item_ids(sorted_item_ids);
+        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
+        temp_solution = CycleDFS(problem, temp_solution, current_item_id, start_item_id >= 0 ? start_item_id : current_item_id, new_sorted_item_ids, amount_to_visit);
+        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+
+        ++counted_visits;
+    }
+    return global_solution;
+}
+
+Solution GreedyHeuristicSearchSolver::IgnoreConnectionsDFS(const PackagedProblem & problem, const Solution & current_solution, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+    Solution global_solution(current_solution);
+    int counted_visits = 0;
+    int total_visits = 0;
+    while (counted_visits < amount_to_visit && total_visits < sorted_item_ids.size()) {
+        ++total_visits;
+
+        int current_item_id = sorted_item_ids[total_visits-1];
+        if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
+        if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
+
+        Solution temp_solution(current_solution);
+        temp_solution.AddItem(problem.problem, current_item_id);
+        vector<int> new_sorted_item_ids(sorted_item_ids);
+        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
+        temp_solution = IgnoreConnectionsDFS(problem, temp_solution, new_sorted_item_ids, amount_to_visit);
+        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+
+        ++counted_visits;
+    }
+    return global_solution;
 }
 
 
