@@ -265,6 +265,82 @@ bool Solution::IsCyclePossible(const Problem & problem) const{
     return false;
 }
 
+bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited, vector<int> _remaining_space, const int & current) const{
+    for (int next : problem.items[current].connections) {
+        if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
+
+            bool fit = true;
+            for (int j = 0; j < _remaining_space.size(); ++j){
+                if (_remaining_space[j] >= problem.items[next].weights[j]) _remaining_space[j] -= problem.items[next].weights[j];
+                else { fit = false; break; }
+            }
+            if (!fit) continue;
+
+            visited.push_back(next);
+            // found some path lets check if it has all selected vertices
+            bool _found = true;
+            for (int i = 0; i < this->selected.size(); ++i){
+                if (this->selected[i] && std::find(visited.begin(), visited.end(), i) == visited.end()){
+                    _found = false;
+                    break;
+                }
+            }
+            if (_found) return true; // it has - path found
+            if (IsPathPossibleDFS(problem, visited, _remaining_space, next)) return true; // path found later
+            visited.pop_back();
+        }
+    }
+    return false; // cycle not found
+}
+bool Solution::IsPathPossible(const Problem & problem) const{
+    if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
+    vector<int> visited;
+    vector<int> _remaining_space = problem.knapsack_sizes;
+    for(int i = 0; i < selected.size(); ++i){
+        bool fit = true;
+        for (int j = 0; j < _remaining_space.size(); ++j){
+            if (_remaining_space[j] >= problem.items[i].weights[j]) _remaining_space[j] -= problem.items[i].weights[j];
+            else { fit = false; break; }
+        } 
+        if (!fit) continue;
+
+        visited.push_back(i);
+        if (IsPathPossibleDFS(problem, visited, _remaining_space, i)) return true; // cycle found somewhere
+        visited.pop_back();
+    }
+    return false;
+}
+
+bool Solution::IsStructurePossible(const PackagedProblem & problem) const{
+    switch (problem.requirements.structureToFind)
+    {
+    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS:
+        return true;
+        break;
+
+    case Problem::Requirements::StructureToFind::CONNECTED_GRAPH:
+    throw std::logic_error("not implemented yet");
+        break;
+
+    case Problem::Requirements::StructureToFind::PATH:
+        return IsPathPossible(problem.problem);
+        break;
+        
+    case Problem::Requirements::StructureToFind::CYCLE:
+        return IsCyclePossible(problem.problem);
+        break;
+        
+    case Problem::Requirements::StructureToFind::TREE:
+    throw std::logic_error("not implemented yet");
+        break;
+    
+    default:
+        throw std::invalid_argument("unnknown structure");
+        break;
+    }
+}
+
+
 
 
 
@@ -621,7 +697,7 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
     start = std::chrono::steady_clock::now();
-    ps.solution = GreedyUniversal(problem, options);
+    ps.solution = NaiveUniversal(problem, options);
     end = std::chrono::steady_clock::now();
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
@@ -629,9 +705,26 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
     return ps;
 }
 
+Solution GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Options & options) {
+    int isiz = problem.problem.items.size();
+    Solution global_solution(isiz, problem.problem.knapsack_sizes); // create empty solution
+    vector<int> sortedItemIds = problem.problem.GetSortedItemIds(options.sort_mode);
+    
+    for (int i = 0; i < isiz; ++i){
+        int current_item_id = sortedItemIds[i];
+        
+        if (global_solution.Fits(problem.problem, current_item_id)){
+            global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
+            if (!global_solution.IsStructurePossible(problem)) global_solution.RemoveItem(problem.problem, current_item_id); // if adding it would make it impossible to construct a valid answer then remove it
+        }
+    }
+    
+    return global_solution;
+}
+
 Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Options & options) {
     int isiz = problem.problem.items.size();
-    Solution globalSolution(isiz, problem.problem.knapsack_sizes); // create empty solution
+    Solution global_solution(isiz, problem.problem.knapsack_sizes); // create empty solution
     vector<int> sortedItemIds = problem.problem.GetSortedItemIds(options.sort_mode);
 
     switch (problem.requirements.structureToFind)
@@ -642,27 +735,27 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
         if (options.multi_run){ // ---------- PATH MULTI RUN ----------
             // Find best starting point
             int startItem = -1;
-            for (int currentItemId : sortedItemIds) {
-                if (globalSolution.Fits(problem.problem, currentItemId)){
-                    globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
-                    startItem = currentItemId;
+            for (int current_item_id : sortedItemIds) {
+                if (global_solution.Fits(problem.problem, current_item_id)){
+                    global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
+                    startItem = current_item_id;
                     break;
                 }
             }
-            if (startItem == -1) return globalSolution; // nothing fits
+            if (startItem == -1) return global_solution; // nothing fits
 
             bool going = true;
             while (going){
                 going = false;
                 // find next item
                 for (auto it = sortedItemIds.begin(); it != sortedItemIds.end(); ++it) {
-                    int currentItemId = *it;
-                    if (!globalSolution.selected[currentItemId] &&
-                        problem.problem.items[startItem].HasConnectionTo(currentItemId) &&
-                        globalSolution.Fits(problem.problem, currentItemId))
+                    int current_item_id = *it;
+                    if (!global_solution.selected[current_item_id] &&
+                        problem.problem.items[startItem].HasConnectionTo(current_item_id) &&
+                        global_solution.Fits(problem.problem, current_item_id))
                     {
-                        globalSolution.AddItem(problem.problem, currentItemId);
-                        startItem = currentItemId;
+                        global_solution.AddItem(problem.problem, current_item_id);
+                        startItem = current_item_id;
                         going = true;
                         break;
                     }
@@ -671,18 +764,18 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
         }
         else { // ---------- PATH SINGLE RUN ----------
             for (int i = 0; i < isiz; ){
-                int currentItemId = sortedItemIds[i];
+                int current_item_id = sortedItemIds[i];
 
-                if (globalSolution.Fits(problem.problem, currentItemId))
-                    globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
-                else return globalSolution; // if does not fit return what have we managed to fit so far
+                if (global_solution.Fits(problem.problem, current_item_id))
+                    global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
+                else return global_solution; // if does not fit return what have we managed to fit so far
 
                 i = -1;
                 int nextItem;
                 do{
-                    if (++i >= isiz) return globalSolution; // if can't find next possible item return what we had so far
+                    if (++i >= isiz) return global_solution; // if can't find next possible item return what we had so far
                     nextItem = sortedItemIds[i];
-                } while (globalSolution.selected[nextItem] || !problem.problem.items[currentItemId].HasConnectionTo(nextItem));
+                } while (global_solution.selected[nextItem] || !problem.problem.items[current_item_id].HasConnectionTo(nextItem));
             }
         }
         break;
@@ -690,21 +783,21 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
 
     case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS: {
         for (int i = 0; i < isiz; ++i){
-            int currentItemId = sortedItemIds[i];
+            int current_item_id = sortedItemIds[i];
 
             // if current item fits add it to the current solution
-            globalSolution.AddItemIfFits(problem.problem, currentItemId);
+            global_solution.AddItemIfFits(problem.problem, current_item_id);
         }
         break;
     }
     
     case Problem::Requirements::StructureToFind::CYCLE: {
         for (int i = 0; i < isiz; ++i){
-            int currentItemId = sortedItemIds[i];
+            int current_item_id = sortedItemIds[i];
             
-            if (globalSolution.Fits(problem.problem, currentItemId)){
-                globalSolution.AddItem(problem.problem, currentItemId); // if current item fits add it to the current solution
-                if (!globalSolution.IsCyclePossible(problem.problem)) globalSolution.RemoveItem(problem.problem, currentItemId); // if adding it would make it impossible to construct a valid answer then remove it
+            if (global_solution.Fits(problem.problem, current_item_id)){
+                global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
+                if (!global_solution.IsCyclePossible(problem.problem)) global_solution.RemoveItem(problem.problem, current_item_id); // if adding it would make it impossible to construct a valid answer then remove it
             }
         }
         break;
@@ -716,45 +809,45 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
     }
     }
 
-    return globalSolution;
+    return global_solution;
 }
 
 Solution GreedySolver::GreedyIgnoreConnections(const Problem & problem, const Options & options){
     int isiz = problem.items.size();
-    Solution globalSolution(isiz, problem.knapsack_sizes); // create empty solution
+    Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
     vector<int> sortedItemIds = problem.GetSortedItemIds(options.sort_mode);
 
     for (int i = 0; i < isiz; ++i){
-        int currentItemId = sortedItemIds[i];
+        int current_item_id = sortedItemIds[i];
 
         // if current item fits add it to the current solution
-        globalSolution.AddItemIfFits(problem, currentItemId);
+        global_solution.AddItemIfFits(problem, current_item_id);
     }
 
-    return globalSolution;
+    return global_solution;
 }
 
 Solution GreedySolver::GreedyPath(const Problem & problem, const Options & options) {
     int isiz = problem.items.size();
-    Solution globalSolution(isiz, problem.knapsack_sizes); // create empty solution
+    Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
     vector<int> sortedItemIds = problem.GetSortedItemIds(options.sort_mode);
 
     for (int i = 0; i < isiz; ){
-        int currentItemId = sortedItemIds[i];
+        int current_item_id = sortedItemIds[i];
 
-        if (globalSolution.Fits(problem, currentItemId))
-            globalSolution.AddItem(problem, currentItemId); // if current item fits add it to the current solution
-        else return globalSolution; // if does not fit return what have we managed to fit so far
+        if (global_solution.Fits(problem, current_item_id))
+            global_solution.AddItem(problem, current_item_id); // if current item fits add it to the current solution
+        else return global_solution; // if does not fit return what have we managed to fit so far
 
         i = -1;
         int nextItem;
         do{
-            if (++i >= isiz) return globalSolution; // if can't find next possible item return what we had so far
+            if (++i >= isiz) return global_solution; // if can't find next possible item return what we had so far
             nextItem = sortedItemIds[i];
-        } while (globalSolution.selected[nextItem] || !problem.items[currentItemId].HasConnectionTo(nextItem));
+        } while (global_solution.selected[nextItem] || !problem.items[current_item_id].HasConnectionTo(nextItem));
     }
 
-    return globalSolution;
+    return global_solution;
 }
 
 
@@ -818,16 +911,16 @@ Solution BranchAndBoundSolver::DFS(const PackagedProblem & problem, Solution sol
 
 //---------- Early Fit ----------
 
-Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId) {
+Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution currentSolution, const int & current_item_id) {
 
 #ifdef DEBUG_BNB
-    cout << "check for " << currentItemId << ", remaining weight: "<< remainingSpace[0] << endl;
+    cout << "check for " << current_item_id << ", remaining weight: "<< remainingSpace[0] << endl;
 #endif
 
-    Solution globalSolution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
+    Solution global_solution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
 
     // construct solution further with recursive DFSLateFitPath calls
-    for (int nextItemId : problem.items[currentItemId].connections){
+    for (int nextItemId : problem.items[current_item_id].connections){
         if (currentSolution.selected[nextItemId]) continue; //don't try adding if next item is already in the solution
 
         if (currentSolution.Fits(problem, nextItemId)){
@@ -836,78 +929,159 @@ Solution BranchAndBoundSolver::DFSEarlyFitPath(const Problem & problem, Solution
             tempSolution.AddItem(problem, nextItemId);
             if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, tempSolution, remainingSpace) > lower_bound*/) {
                 tempSolution = DFSEarlyFitPath(problem, tempSolution, nextItemId);
-                if (tempSolution.max_value > globalSolution.max_value)  globalSolution = tempSolution;
+                if (tempSolution.max_value > global_solution.max_value)  global_solution = tempSolution;
             }
         }
     }
 
 #ifdef DEBUG_BNB
-    cout << "exit with: " << globalSolution.max_value << endl;
+    cout << "exit with: " << global_solution.max_value << endl;
 #endif
-    return globalSolution; // return the best solution from all paths starting from currentItemId
+    return global_solution; // return the best solution from all paths starting from current_item_id
 }
 
 Solution BranchAndBoundSolver::BnBEarlyFitPath(const Problem & problem) {
     int isiz = problem.items.size();
-    Solution globalSolution(isiz, problem.knapsack_sizes); // create empty solution
+    Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
 
     // check possible solutions from every starting point
     for (int i = 0; i < isiz; ++i){
 
-        if (globalSolution.Fits(problem, i)){
+        if (global_solution.Fits(problem, i)){
             Solution currentSolution(isiz, problem.knapsack_sizes); // create empty solution
             currentSolution.AddItem(problem, i);
-            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, currentSolution, remainingSpace) > globalSolution.max_value*/){
+            if (true/*GreedyIgnoreConnections(problem, Problem::SortMode::VALUE_WEIGHT_RATIO, currentSolution, remainingSpace) > global_solution.max_value*/){
                 currentSolution = DFSEarlyFitPath(problem, currentSolution, i);
-                if(currentSolution.max_value > globalSolution.max_value) globalSolution = currentSolution; // if newly found solution is better use it as you global solution
+                if(currentSolution.max_value > global_solution.max_value) global_solution = currentSolution; // if newly found solution is better use it as you global solution
             }
         }
     }
 
-    return globalSolution;
+    return global_solution;
 }
 
 //---------- Late Fit ----------
 
-Solution BranchAndBoundSolver::DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & currentItemId) {
+Solution BranchAndBoundSolver::DFSLateFitPath(const Problem & problem, Solution currentSolution, const int & current_item_id) {
 
-    if (!currentSolution.AddItemIfFits(problem, currentItemId)) // if current item fits add it to the current solution
+    if (!currentSolution.AddItemIfFits(problem, current_item_id)) // if current item fits add it to the current solution
         return currentSolution; // if does not fit return what have we managed to fit so far
 
 #ifdef DEBUG_BNB_LF
-    cout << "check for " << currentItemId << ", remaining weight: "<< currentSolution.remainingSpace[0] << endl;
+    cout << "check for " << current_item_id << ", remaining weight: "<< currentSolution.remainingSpace[0] << endl;
 #endif
 
     
-    Solution globalSolution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
+    Solution global_solution = currentSolution; // in worst case we will return what we have so far (it is a valid solution since we adding items in path fashion)
 
     // construct solution further with recursive DFSLateFitPath calls
-    for (int nextItemId : problem.items[currentItemId].connections){
+    for (int nextItemId : problem.items[current_item_id].connections){
         if (currentSolution.selected[nextItemId]) continue; //don't try adding if next item is already in the solution
 
         Solution tempSolution = DFSLateFitPath(problem, currentSolution, nextItemId);
-        if (tempSolution.max_value > globalSolution.max_value) globalSolution = tempSolution;
+        if (tempSolution.max_value > global_solution.max_value) global_solution = tempSolution;
     }
 
 #ifdef DEBUG_BNB_LF
-    cout << "exit with: " << globalSolution.max_value << endl;
+    cout << "exit with: " << global_solution.max_value << endl;
 #endif
-    return globalSolution; // return the best solution from all paths starting from currentItemId
+    return global_solution; // return the best solution from all paths starting from current_item_id
 }
 
 Solution BranchAndBoundSolver::BnBLateFitPath(const Problem & problem) {
     int isiz = problem.items.size();
-    Solution globalSolution(isiz, problem.knapsack_sizes); // create empty solution
+    Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
 
     // check possible solutions from every starting point
     for (int i = 0; i < isiz; ++i){
         Solution currentSolution(isiz, problem.knapsack_sizes); // create empty solution 
 
         currentSolution = DFSLateFitPath(problem, currentSolution, i);
-        if(currentSolution.max_value > globalSolution.max_value) globalSolution = currentSolution; // if newly found solution is better use it as you global solution
+        if(currentSolution.max_value > global_solution.max_value) global_solution = currentSolution; // if newly found solution is better use it as you global solution
     }
 
-    return globalSolution;
+    return global_solution;
+}
+
+
+
+
+//---------- GRASP SOLVER ----------
+
+bool GRASPSolver::expect_perfection = false;
+
+string GRASPSolver::GetAlgorithmName(const Options & options){
+    string name = "grasp-" + ToString(options.sort_mode);
+    name += "_chose-from-" + std::to_string(options.chose_from);
+
+    if (options.iterations > 0) {
+        if (options.coverage > 0.0) throw std::invalid_argument("both iteratations and coverage are positive");
+        else name += "_iterations-" + std::to_string(options.iterations);
+    }
+    else {
+        if (options.coverage > 0.0) name += "_coverage-" + std::to_string(options.coverage);
+        else throw std::invalid_argument("both iteratations and coverage are non positive");
+    }
+
+    return name;
+}
+
+PackagedSolution GRASPSolver::Solve(PackagedProblem & problem, Options options){
+    PackagedSolution ps;
+
+    if (options.iterations > 0) {
+        if (options.coverage > 0.0) throw std::invalid_argument("both iteratations and coverage are positive");
+    }
+    else {
+        if (options.coverage > 0.0) options.iterations = static_cast<double>(pow(2, problem.problem.items.size())) * options.coverage;
+        else throw std::invalid_argument("both iteratations and coverage are non positive");
+    }
+    
+    // run with time measure
+    std::chrono::steady_clock::time_point start, end;
+
+    if (options.iterations == 1){
+        start = std::chrono::steady_clock::now();
+        ps.solution = Universal(problem, options);
+        end = std::chrono::steady_clock::now();
+    }
+    else {
+        start = std::chrono::steady_clock::now();
+        ps.solution = MultiRun(problem, options);
+        end = std::chrono::steady_clock::now();
+    }
+
+    const std::chrono::duration<double> elapsed_seconds{end - start};
+    ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
+
+    return ps;
+}
+
+Solution GRASPSolver::Universal(const PackagedProblem & problem, const Options & options) {
+    Solution global_solution(problem.problem.items.size(), problem.problem.knapsack_sizes);
+    vector<int> sorted_item_ids = problem.problem.GetSortedItemIds(options.sort_mode);
+    int amount_to_chose_from = problem.problem.items.size() * options.chose_from;
+    while (sorted_item_ids.size() > 0) {
+        int pick = std::rand() % std::min(amount_to_chose_from, static_cast<int>(sorted_item_ids.size()));
+        int current_item_id = sorted_item_ids[pick];
+
+        if (global_solution.Fits(problem.problem, current_item_id)){
+            global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
+            if (!global_solution.IsStructurePossible(problem)) global_solution.RemoveItem(problem.problem, current_item_id); // if adding it would make it impossible to construct a valid answer then remove it
+        }
+
+        sorted_item_ids.erase(sorted_item_ids.begin() + pick);
+    }
+    return global_solution;
+}
+Solution GRASPSolver::MultiRun(const PackagedProblem & problem, const Options & options) {
+    Solution global_solution(problem.problem.items.size(), problem.problem.knapsack_sizes);
+
+    for (int i = 0; i < options.iterations; ++i){
+        Solution temp_solution = Universal(problem, options);
+        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+    }
+    return global_solution;
 }
 
 

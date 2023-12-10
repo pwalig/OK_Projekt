@@ -21,8 +21,10 @@ namespace knapsack_solver {
 class Solution {
     bool IsPathDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & length) const;
     bool IsCycleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start, const int & length) const;
-    /// @brief Should not be called by anything else than IsCyclePossible()
+    /// @brief Should not be called by anything else than `IsCyclePossible()`
     bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, std::vector<int> _remaining_space, const int & current, const int & start) const;
+    /// @brief Should not be called by anything else than `IsPathPossible()`
+    bool IsPathPossibleDFS(const Problem & problem, std::vector<int> & visited, std::vector<int> _remaining_space, const int & current) const;
 
     public:
     int max_value;
@@ -61,6 +63,14 @@ class Solution {
     /// @param problem problem needed to define connections and knapsack sizes
     /// @throws invalid_argument - if problem.items is different size than this->selected
     bool IsCyclePossible(const Problem & problem) const;
+    /// @brief Check if path that would fit in the knapsack is possible, assuming that items can only be added and not removed.
+    /// @param problem problem needed to define connections and knapsack sizes
+    /// @throws invalid_argument - if problem.items is different size than this->selected
+    bool IsPathPossible(const Problem & problem) const;
+    /// @brief Check if path that would fit in the knapsack is possible, assuming that items can only be added and not removed.
+    /// @param problem problem needed to define connections and knapsack sizes and structure to find
+    /// @throws invalid_argument - if problem.items is different size than this->selected
+    bool IsStructurePossible(const PackagedProblem & problem) const;
 };
 
 
@@ -122,27 +132,6 @@ class DynamicSolver{
 
 
 
-class GreedySolver{
-    public:
-    GreedySolver() = delete;
-    struct Options{
-        Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
-        bool multi_run = true;
-        Options() = default;
-        explicit Options(std::vector<std::string> & args);
-    };
-
-    static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
-    static Solution GreedyIgnoreConnections(const Problem & problem, const Options & options);
-    static Solution GreedyPath(const Problem & problem, const Options & options);
-
-    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
-    static std::string GetAlgorithmName(const Options & options);
-    static bool expect_perfection;
-};
-
-
-
 class BruteForceSolver{
     public:
     BruteForceSolver() = delete;
@@ -182,7 +171,7 @@ class BranchAndBoundSolver{
 
     public:
     //static int GreedyIgnoreConnections(const Problem & problem, Solution currentSolution);
-    
+
     struct Options{
         enum class BoundingFunction { NONE, CONTINOUS, BASE_DYNAMIC };
         BoundingFunction bounding_function = BoundingFunction::NONE;
@@ -200,6 +189,54 @@ class BranchAndBoundSolver{
     static Solution BnBEarlyFitPath(const Problem & problem);
 
     static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
+};
+
+
+
+class GreedySolver{
+    public:
+    GreedySolver() = delete;
+    struct Options{
+        Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
+        bool multi_run = true;
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
+    };
+
+    static Solution NaiveUniversal(const PackagedProblem & problem, const Options & options);
+
+    /// @deprecated replaced by `Solution` `GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Options & options)`
+    static Solution GreedyUniversal(const PackagedProblem & problem, const Options & options);
+    /// @deprecated replaced by `Solution` `GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Options & options)`
+    static Solution GreedyIgnoreConnections(const Problem & problem, const Options & options);
+    /// @deprecated replaced by `Solution` `GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Options & options)`
+    static Solution GreedyPath(const Problem & problem, const Options & options);
+
+    static PackagedSolution Solve(PackagedProblem & problem, const Options & options);
+    static std::string GetAlgorithmName(const Options & options);
+    static bool expect_perfection;
+};
+
+
+
+class GRASPSolver{
+    public:
+    GRASPSolver() = delete;
+    struct Options{
+        Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
+        int iterations = 1;
+        double coverage = 0.0;
+        double chose_from = 0.25;
+        Options() = default;
+        explicit Options(std::vector<std::string> & args);
+    };
+
+    static Solution Universal(const PackagedProblem & problem, const Options & options);
+    static Solution MultiRun(const PackagedProblem & problem, const Options & options);
+
+    static PackagedSolution Solve(PackagedProblem & problem, Options options);
     static std::string GetAlgorithmName(const Options & options);
     static bool expect_perfection;
 };

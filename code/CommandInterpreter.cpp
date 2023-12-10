@@ -68,10 +68,33 @@ GreedySolver::Options::Options(std::vector<std::string> & args){
     }, this->sort_mode);
 }
 
+GRASPSolver::Options::Options(std::vector<std::string> & args){
+    // coverage
+    CommandInterpreter::Consume<GRASPSolver::Options>(args, "-coverage", [](const string & arg, GRASPSolver::Options & op){
+        op.coverage = std::stod(arg);
+        if (op.coverage <= 0.0) throw std::invalid_argument("grasp coverage should be positive");
+        op.iterations = 0;
+    }, *this);
+    // iterations
+    CommandInterpreter::Consume<GRASPSolver::Options>(args, "-iterations", [](const string & arg, GRASPSolver::Options & op){
+        if (op.coverage > 0.0) throw std::invalid_argument("attempted to set iterations and coverage simultaneously");
+        op.iterations = std::stod(arg);
+        if (op.iterations <= 0) throw std::invalid_argument("grasp iterations should be positive");
+    }, *this);
+    // to chose from
+    CommandInterpreter::Consume<double>(args, "-chose-from", [](const string & arg, double & dbl){
+        dbl = std::stod(arg);
+    }, this->chose_from);
+    // sort method
+    CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
+        sm = ToSortMode(arg);
+    }, this->sort_mode);
+}
+
 GreedyHeuristicSearchSolver::Options::Options(std::vector<std::string> & args){
-    // multi-run / single-run
-    CommandInterpreter::Consume<double>(args, "-coverage", [](const string & arg, double & _coverage){
-        _coverage = std::stod(arg);
+    // coverage
+    CommandInterpreter::Consume<double>(args, "-coverage", [](const string & arg, double & dbl){
+        dbl = std::stod(arg);
     }, this->coverage);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
@@ -189,6 +212,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         string algorithm = Consume(args, 1);
         if (algorithm == "greedy") ps = SolveFromArgs<GreedySolver>(args);
         else if (algorithm == "greedy-heuristic-search") ps = SolveFromArgs<GreedyHeuristicSearchSolver>(args);
+        else if (algorithm == "grasp") ps = SolveFromArgs<GRASPSolver>(args);
         else if (algorithm == "brute-force") ps = SolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") ps = SolveFromArgs<BranchAndBoundSolver>(args);
         else if (algorithm == "dynamic-programming") ps = SolveFromArgs<DynamicSolver>(args);
@@ -203,6 +227,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         string algorithm = Consume(args, 1);
         if (algorithm == "greedy") BatchSolveFromArgs<GreedySolver>(args);
         else if (algorithm == "greedy-heuristic-search") BatchSolveFromArgs<GreedyHeuristicSearchSolver>(args);
+        else if (algorithm == "grasp") BatchSolveFromArgs<GRASPSolver>(args);
         else if (algorithm == "brute-force") BatchSolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") BatchSolveFromArgs<BranchAndBoundSolver>(args);
         else if (algorithm == "dynamic-programming") BatchSolveFromArgs<DynamicSolver>(args);
