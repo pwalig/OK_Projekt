@@ -322,16 +322,57 @@ inline void BatchSolve(const std::string & directory_path, const typename T::Opt
     int amount = data["amount"];
     fin.close();
 
+    // variables for collecting averages
+    double avg_solve_time = 0.0;
+    double avg_quality = 0.0;
+    double avg_max_value = 0.0;
+    std::vector<double> avg_remaining;
+    int opt_max_value_sum = 0;
+    int max_value_sum = 0;
+
     // create solutions
+    PackagedSolution ps;
     for (int i = 0; i < amount; ++i){
         PackagedProblem problem(directory_path + FND_PROBLEMS_FOLDER + FND_PROBLEM_FILE + std::to_string(i) + ".json");
-        PackagedSolution ps = Solve<T>(problem, options);
+        ps = Solve<T>(problem, options);
         if (i == 0) {
             std::filesystem::remove_all(directory_path + "/" + ps.algorithm);
             std::filesystem::create_directories(directory_path + "/" + ps.algorithm);
+            for (int j = 0; j < ps.solution.remainingSpace.size(); ++j)
+                avg_remaining.push_back(static_cast<double>(ps.solution.remainingSpace[j]));
         }
+
+        // collect sums
+        else
+            for (int j = 0; j < ps.solution.remainingSpace.size(); ++j)
+                avg_remaining[j] += static_cast<double>(ps.solution.remainingSpace[j]);
+        avg_solve_time += ps.solve_time;
+        avg_quality += ps.quality;
+        avg_max_value += ps.solution.max_value;
+        max_value_sum += ps.solution.max_value;
+        opt_max_value_sum += problem.known_optimum;
+
         ps.ExportJSON(directory_path + "/" + ps.algorithm + FND_SOLUTION_FILE + std::to_string(i) + ".json");
     }
+
+    // calculate averages
+    avg_solve_time /= amount;
+    avg_quality /= amount;
+    avg_max_value /= amount;
+    for (int j = 0; j < avg_remaining.size(); ++j){
+        avg_remaining[j] /= amount;
+    }
+    
+    // save solution info to file
+    nlohmann::json solve_data;
+    solve_data["average-solve-time"] = avg_solve_time;
+    solve_data["average-quality"] = avg_quality;
+    solve_data["average-max-value"] = avg_max_value;
+    solve_data["average-remaining-space"] = avg_remaining;
+    solve_data["overall-quality"] = static_cast<double>(opt_max_value_sum) / static_cast<double>(max_value_sum);
+    std::ofstream fout (directory_path + "/" + ps.algorithm + "/solve-info.json");
+    fout << solve_data.dump(4);
+    fout.close();
 }
 
 

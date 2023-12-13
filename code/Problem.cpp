@@ -378,7 +378,7 @@ string ToString(const knapsack_solver::Problem::SortMode & sm){
     switch (sm)
     {
     case Problem::SortMode::VALUE_WEIGHT_RATIO:
-        return "value/weight";
+        return "value-weight";
         break;
     case Problem::SortMode::VALUE:
         return "value";
@@ -423,7 +423,7 @@ knapsack_solver::Problem::Requirements::WeightTreatment ToWeightTreatment(const 
 
 }
 knapsack_solver::Problem::SortMode ToSortMode(const std::string & str){
-    if (str == "value/weight") return Problem::SortMode::VALUE_WEIGHT_RATIO;
+    if (str == "value-weight") return Problem::SortMode::VALUE_WEIGHT_RATIO;
     else if (str == "value") return Problem::SortMode::VALUE;
     else if (str == "weight") return Problem::SortMode::WEIGHT;
     else if (str == "random") return Problem::SortMode::RANDOM;
