@@ -58,10 +58,6 @@ std::string CommandInterpreter::Consume(std::vector<std::string> & args, const i
 // ---------- OPTIONS CONSTRUCTORS ----------
 
 GreedySolver::Options::Options(std::vector<std::string> & args){
-    // multi-run / single-run
-    CommandInterpreter::Consume<bool>(args, "-single-run", [](bool & sr){
-        sr = false;
-    }, this->multi_run);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
         sm = ToSortMode(arg);
@@ -215,7 +211,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         else if (algorithm == "grasp") ps = SolveFromArgs<GRASPSolver>(args);
         else if (algorithm == "brute-force") ps = SolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") ps = SolveFromArgs<BranchAndBoundSolver>(args);
-        else if (algorithm == "dynamic-programming") ps = SolveFromArgs<DynamicSolver>(args);
+        else if (algorithm == "dynamic") ps = SolveFromArgs<DynamicSolver>(args);
         else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
             
         if (print) cout << ps;
@@ -230,7 +226,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
         else if (algorithm == "grasp") BatchSolveFromArgs<GRASPSolver>(args);
         else if (algorithm == "brute-force") BatchSolveFromArgs<BruteForceSolver>(args);
         else if (algorithm == "branch-and-bound") BatchSolveFromArgs<BranchAndBoundSolver>(args);
-        else if (algorithm == "dynamic-programming") BatchSolveFromArgs<DynamicSolver>(args);
+        else if (algorithm == "dynamic") BatchSolveFromArgs<DynamicSolver>(args);
         else throw std::invalid_argument(algorithm + " is not a recognised algorithm");
         break;
     }
