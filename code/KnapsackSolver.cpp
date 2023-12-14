@@ -35,8 +35,7 @@ int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProble
 }
 
 
-void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const std::vector<Problem::Requirements> & rqv, const int & repeats){
-    if (gsv.size() != rqv.size()) throw std::invalid_argument("vectors dont match");
+void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats/*, vector<vector<string>> args*/){
     
     // prepare threads
     std::vector<std::thread> threads;
@@ -44,7 +43,7 @@ void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings
 
     // run threads
     for (int i = 0; i < gsv.size(); ++i){
-        threads.push_back(std::thread([&gsv, &rqv, i, repeats](){
+        threads.push_back(std::thread([&gsv, rq, i, repeats](){
             // prepare threads
             struct SolveData {
                 PackagedSolution ibf_solution;
@@ -60,10 +59,10 @@ void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings
 
             // run threads
             for (int t = 0; t < repeats; ++t){
-                sub_threads.push_back(std::thread([&gsv, &rqv, t, &sdv, i](){
-                    PackagedProblem pp(gsv[i], rqv[i]);
-                    sdv[t].ibf_solution = Solve<BruteForceSolver>(pp, BruteForceSolver::Options());
-                    sdv[t].greedy_solution = Solve<GreedySolver>(pp, GreedySolver::Options());
+                sub_threads.push_back(std::thread([&gsv, &rq, t, &sdv, i](){
+                    PackagedProblem pp(gsv[i], rq);
+                    sdv[t].ibf_solution = Solve<BruteForceSolver>(pp, BruteForceSolver::Options(/*args[0]*/));
+                    sdv[t].greedy_solution = Solve<GreedySolver>(pp, GreedySolver::Options(/*args[1]*/));
                     sdv[t].optimum = sdv[t].ibf_solution.solution.max_value;
                 }));
             }
@@ -73,10 +72,10 @@ void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings
             ibf_mtr.amount = repeats;
             for (int t = 0; t < repeats; ++t) {
                 sub_threads[t].join();
-                ibf_mtr.AddSolution(sdv[t].ibf_solution, sdv[t].optimum);
+                ibf_mtr.AddSolution(sdv[t].ibf_solution, sdv[t].optimum); // you can't add solutions in thread bc threads would have to acces the same memory (possible data races)
             }
             ibf_mtr.DivideByAmount();
-            //std::ofstream fout("../tests/yeeet" + std::to_string(i) + ".txt");
+            //std::ofstream fout("../tests/times" + std::to_string(i) + ".txt");
             //fout << gsv[i].instance_size << " ; " << ibf_m
         }));
     }

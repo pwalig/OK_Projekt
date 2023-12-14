@@ -26,7 +26,7 @@ class KnapsackSolver {
     static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
 };
 
-void RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const std::vector<Problem::Requirements> & rqv, const int & repeats);
+void RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats);
 
 
 class MassTestResult {

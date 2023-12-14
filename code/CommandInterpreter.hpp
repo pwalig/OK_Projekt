@@ -31,7 +31,17 @@ class CommandInterpreter{
     /// @param args vector of arguments. WARNING - will be modified.
     /// @param value argument to find
     /// @param lambda action to perform if argument was found
+    static void Consume(std::vector<std::string> & args, const std::string & value, const std::function<void(const std::string &)> & lambda);
+    /// @brief Consume Argument: Finds value in args. Executes lambda. And erases value from args.
+    /// @param args vector of arguments. WARNING - will be modified.
+    /// @param value argument to find
+    /// @param lambda action to perform if argument was found
     template <typename T> static void Consume(std::vector<std::string> & args, const std::string & value, const std::function<void(T &)> & lambda, T & to_modify);
+    /// @brief Consume Argument: Finds value in args. Executes lambda. And erases value from args.
+    /// @param args vector of arguments. WARNING - will be modified.
+    /// @param value argument to find
+    /// @param lambda action to perform if argument was found
+    static void Consume(std::vector<std::string> & args, const std::string & value, const std::function<void()> & lambda);
     /// @brief Consume Argument: returns argument under arg_id and erases it from args.
     /// @param args vector of arguments. WARNING - will be modified.
     /// @param arg_id index of the argument

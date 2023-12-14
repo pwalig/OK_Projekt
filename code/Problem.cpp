@@ -66,9 +66,27 @@ Problem::Problem(const GenerationSettings & gs) {
             this->knapsack_sizes.push_back(std::rand() % gs.knapsack_size_limit_exclusive);
         }
     }
-    else
-        this->knapsack_sizes = gs.fixed_knapsack_sizes;
+    else {
+        for (int i = 0; i < gs.sub_knapsacks; ++i){
+            this->knapsack_sizes.push_back(gs.knapsack_size_limit_exclusive);
+        }
+    }
     this->GenerateInnerItems(gs.instance_size, gs.sub_knapsacks, gs.value_limit_exclusive, gs.weight_limit_exclusive, gs.connection_density);
+}
+
+Problem::GenerationSettings::GenerationSettings(const string & file_name){
+    std::ifstream fin (file_name);
+    json data = json::parse(fin);
+    
+    instance_size = data["instance-size"];
+    sub_knapsacks = data["sub-knapsacks"];
+    randomize_knapsack_sizes = data["randomize-knapsack-sizes"];
+    knapsack_size_limit_exclusive = data["knapsack-size-limit"];
+    value_limit_exclusive = data["value-limit-exclusive"];
+    weight_limit_exclusive = data["weight-limit-exclusive"];
+    connection_density = data["connection-density"];
+
+    fin.close();
 }
 
 void Problem::ExportJSON(const string & file_name) const{

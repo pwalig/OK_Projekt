@@ -45,10 +45,11 @@ class Problem {
         int sub_knapsacks;
         bool randomize_knapsack_sizes;
         int knapsack_size_limit_exclusive;
-        std::vector<int> fixed_knapsack_sizes;
         int value_limit_exclusive;
         int weight_limit_exclusive;
         double connection_density;
+        GenerationSettings() = default;
+        GenerationSettings(const std::string & file_name);
     };
 
     Problem() = default;

@@ -38,12 +38,29 @@ void CommandInterpreter::Consume(std::vector<std::string> & args, const std::str
     }
 }
 
+void CommandInterpreter::Consume(std::vector<std::string> & args, const std::string & value, const std::function<void(const std::string &)> & lambda){
+    auto it = std::find(args.begin(), args.end(), value);
+    if (it != args.end()) {
+        it = args.erase(it);
+        lambda((*it));
+        args.erase(it);
+    }
+}
+
 template <typename T>
 void CommandInterpreter::Consume(std::vector<std::string> & args, const std::string & value, const std::function<void(T &)> & lambda, T & to_modify){
     auto it = std::find(args.begin(), args.end(), value);
     if (it != args.end()) {
         it = args.erase(it);
         lambda(to_modify);
+    }
+}
+
+void CommandInterpreter::Consume(std::vector<std::string> & args, const std::string & value, const std::function<void()> & lambda){
+    auto it = std::find(args.begin(), args.end(), value);
+    if (it != args.end()) {
+        it = args.erase(it);
+        lambda();
     }
 }
 
@@ -238,7 +255,13 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
     }
 
     case Command::GENERATE_PROBLEM:{
+        string file_name;
         Problem::GenerationSettings gs;
+        
+        Consume(args, "-file", [&gs](const string & arg){
+            gs = Problem::GenerationSettings(arg);
+        });
+
         Problem::Requirements rq;
         int amount = 0;
 
