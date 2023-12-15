@@ -25,7 +25,8 @@ std::map<string, CommandInterpreter::Command> CommandInterpreter::command_map =
     {"print", Command::PRINT}, 
     {"solve", Command::SOLVE},
     {"batch-solve", Command::BATCH_SOLVE},
-    {"generate", Command::GENERATE_PROBLEM}
+    {"generate", Command::GENERATE_PROBLEM},
+    {"gather", Command::GATHER}
 };
 
 template <typename T>
@@ -69,6 +70,7 @@ std::string CommandInterpreter::Consume(std::vector<std::string> & args, const i
     args.erase(args.begin() + arg_id);
     return arg;
 }
+
 
 
 
@@ -155,6 +157,9 @@ BranchAndBoundSolver::Options::Options(std::vector<std::string> & args) : Option
 
 DynamicSolver::Options::Options(std::vector<std::string> & args) : Options(){}
 
+
+
+
 // ---------- COMMAND INTERPRETING ----------
 
 template <typename T>
@@ -211,15 +216,15 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
     case Command::SOLVE:{
         // output file
         string export_file = "";
-        Consume<string>(args, "-o", [](const string & arg, string & el){
-            el = arg;
-        }, export_file);
+        Consume(args, "-o", [&export_file](const string & arg){
+            export_file = arg;
+        });
         
         // print on console
         bool print = false;
-        Consume<bool>(args, "-p", [](bool & el){
-            el = true;
-        }, print);
+        Consume(args, "-p", [&print](){
+            print = true;
+        });
 
         PackagedSolution ps;
         string algorithm = Consume(args, 1);
@@ -302,6 +307,38 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
 
         args.clear(); // "generate" does not leave unhandled arguments - iterates through the whole thing and throws error on first unrecognised argument
 
+        break;
+    }
+
+    case Command::GATHER:{
+        string field_name(Consume(args, 1));
+        std::filesystem::path dir(Consume(args, 0));
+        std::ofstream fout;
+        if (std::filesystem::exists(dir.parent_path().string() + "/" + field_name + ".txt")) {
+            fout.open(dir.parent_path().string() + "/" + field_name + ".txt", std::ios_base::app);
+        }
+        else {
+            fout.open(dir.parent_path().string() + "/" + field_name + ".txt");
+            fout << "^ N ^ ";
+            for (auto const& dir_entry : std::filesystem::directory_iterator{dir}){
+                if (!std::filesystem::is_directory(dir_entry)) continue;
+                if (dir_entry.path().stem().string() == "problems") continue;
+                fout << dir_entry.path().stem().string() << " ^ ";
+            }
+        }
+        fout << endl << "| " << dir.stem().string() << " | ";
+        for (auto const& dir_entry : std::filesystem::directory_iterator{dir}){
+            if (!std::filesystem::is_directory(dir_entry)) continue;
+            if (dir_entry.path().stem().string() == "problems") continue;
+            for (auto const& file_entry : std::filesystem::directory_iterator{dir_entry.path()}){
+                if (file_entry.path().filename().string() == "solve-info.json"){
+                    std::ifstream fin (file_entry.path().string());
+                    json data = json::parse(fin);
+                    fout << data[field_name] << " | ";
+                }
+            }
+        }
+        fout.close();
         break;
     }
     

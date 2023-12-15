@@ -24,12 +24,15 @@ namespace knapsack_solver {
 class KnapsackSolver {
     public:
     static int GoalFunction(const Solution & solution, const PackagedProblem & problem);
+    static void RunMassTests(const std::string & generation_settings_directory, int amount = -1);
+    static void RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats);
 };
 
-void RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats);
+
 
 
 class MassTestResult {
+    public:
     struct ValidationStatus{
         double undergone = 0.0;
         double valid = 0.0;
@@ -49,8 +52,11 @@ class MassTestResult {
     ValidationStatus validation_status;
     double overall_quality = 0.0;
 
-    public:
     int amount = 0;
+
+    MassTestResult() = default;
+    MassTestResult(int sub_knapsacks);
+
     void DivideByAmount();
     /// @brief division by ammount is handled by `MassTestResult::ExportJSON(const std::string & file_name)`
     void AddSolution(const PackagedSolution & ps, const int & optimum);
@@ -298,7 +304,7 @@ inline void BatchSolve(const std::string & directory_path, const typename T::Opt
     }
 
     // calculate the averages
-    MassTestResult mtr;
+    MassTestResult mtr(problem0.problem.knapsack_sizes.size());
     mtr.amount = amount;
     for (int i = 0; i < amount; ++i) {
         threads[i].join();

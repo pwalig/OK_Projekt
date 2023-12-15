@@ -35,7 +35,112 @@ int KnapsackSolver::GoalFunction(const Solution & solution, const PackagedProble
 }
 
 
-void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats/*, vector<vector<string>> args*/){
+void KnapsackSolver::RunMassTests(const string & generation_settings_directory, int amount){
+    if (amount < 0){
+        std::ifstream fin(generation_settings_directory + FND_BATCH_INFO_FILE);
+        json data = json::parse(fin);
+        int amount = data["amount"];
+    }
+    vector<Problem::GenerationSettings> gsv;
+    for (int i = 0; i < amount; ++i){
+        gsv.push_back(generation_settings_directory + FND_GENERATION_SETTINGS_FILE + std::to_string(i) + ".json");
+    }
+    Problem::Requirements rq;
+    RunMassTests(gsv, rq, 5);
+}
+
+
+void KnapsackSolver::RunMassTests(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats){
+    
+    // initialise files
+    std::ofstream fout("../tests/times.txt");
+    std::ofstream foum("../tests/max-values.txt");
+
+    for (int i = 0; i < gsv.size(); ++i){
+        cout << "instance " << i << endl;
+        fout << gsv[i].instance_size;
+        foum << gsv[i].instance_size;
+
+        // prepare threads
+        struct SolveData {
+            vector<PackagedSolution> solutions;
+            int optimum;
+        };
+        std::vector<SolveData> sdv(repeats, SolveData());
+        std::vector<std::thread> sub_threads;
+        sub_threads.reserve(repeats);
+
+        // run threads
+        for (int t = 0; t < repeats; ++t){
+            sub_threads.push_back(std::thread([&gsv, &rq, t, &sdv, i](){
+                PackagedProblem pp(gsv[i], rq);
+
+                // iterative brute force
+                if (gsv[i].instance_size < 20) sdv[t].solutions.push_back(Solve<BruteForceSolver>(pp, BruteForceSolver::Options()));
+                else sdv[t].solutions.push_back(PackagedSolution());
+                sdv[t].optimum = sdv[t].solutions[0].solution.max_value;
+                cout << "brute-force";
+
+                // random
+                GreedySolver::Options greedy_op;
+                greedy_op.sort_mode = Problem::SortMode::RANDOM;
+                sdv[t].solutions.push_back(Solve<GreedySolver>(pp, greedy_op));
+                cout << "random";
+
+                // Greedy
+                greedy_op.sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
+                sdv[t].solutions.push_back(Solve<GreedySolver>(pp, greedy_op));
+                cout << "greedy";
+
+                // Greedy Heuristic Search
+                GreedyHeuristicSearchSolver::Options ghs_op;
+                ghs_op.coverage = 0.1;
+                sdv[t].solutions.push_back(Solve<GreedyHeuristicSearchSolver>(pp, ghs_op));
+                cout << "heuristic";
+
+                // GRASP
+                GRASPSolver::Options grasp_op;
+                grasp_op.iterations = -1;
+                grasp_op.coverage = 0.1;
+                if (gsv[i].instance_size < 20) sdv[t].solutions.push_back(Solve<GRASPSolver>(pp, grasp_op));
+                else sdv[t].solutions.push_back(PackagedSolution());
+                cout << "grasp";
+                cout << "thread " << t << " finished\n";
+            }));
+        }
+
+        // calculate average results for each tested algorithm
+        vector<MassTestResult> mtrv(5, MassTestResult()); // vector of size algos
+        for (int t = 0; t < repeats; ++t) {
+            sub_threads[t].join();
+            for (int algo = 0; algo < sdv[t].solutions.size(); ++algo){
+                mtrv[algo].AddSolution(sdv[t].solutions[algo], sdv[t].optimum);
+            }
+            cout << "thread " << t << " joined\n";
+        }
+
+        // output results to files
+        for (int algo = 0; algo < sdv[0].solutions.size(); ++algo){
+            mtrv[algo].amount = repeats;
+            mtrv[algo].DivideByAmount();
+            fout << " ; " << mtrv[algo].solve_time;
+            foum << " ; " << mtrv[algo].max_value;
+        }
+            
+        fout << endl;
+        foum << endl;
+    }
+
+    fout.close();
+    foum.close();
+}
+
+/// @brief 
+/// @param gsv 
+/// @param rq 
+/// @param repeats 
+/// @deprecated use RunMassTests
+void RunMassTestsThreaded(const std::vector<Problem::GenerationSettings> & gsv, const Problem::Requirements & rq, const int & repeats/*, vector<vector<string>> args*/){
     
     // prepare threads
     std::vector<std::thread> threads;
@@ -88,10 +193,14 @@ void knapsack_solver::RunMassTests(const std::vector<Problem::GenerationSettings
 
 
 //---------- MASS TEST RESULT ----------
+MassTestResult::MassTestResult(int sub_knapsacks){
+    for (int j = 0; j < sub_knapsacks; ++j)
+        this->remaining.push_back(0.0);
+}
 
 void MassTestResult::AddSolution(const PackagedSolution & ps, const int & optimum){
     // remaining space
-    if (this->remaining.empty())
+    if (this->remaining.size() == 0)
         for (int j = 0; j < ps.solution.remainingSpace.size(); ++j)
             this->remaining.push_back(static_cast<double>(ps.solution.remainingSpace[j]));
     else

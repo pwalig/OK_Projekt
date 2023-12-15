@@ -11,7 +11,7 @@ namespace knapsack_solver{
 
 
 class CommandInterpreter{
-    enum class Command { RUN_TASKS, PRINT, SOLVE, BATCH_SOLVE, GENERATE_PROBLEM };
+    enum class Command { RUN_TASKS, PRINT, SOLVE, BATCH_SOLVE, GENERATE_PROBLEM, GATHER };
     static std::map<std::string, Command> command_map;
     /// @brief Runs Solve<T>, based on given arguments and provided type
     /// @tparam T Solver Type (eg. GreedySolver)
