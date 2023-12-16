@@ -46,7 +46,7 @@ class MassTestResult {
 
     double solve_time = 0.0;
     double quality = 0.0;
-    int max_value = 0.0;
+    double max_value = 0.0;
     std::vector<double> remaining;
     int opt_max_value_sum = 0;
     ValidationStatus validation_status;
@@ -177,7 +177,6 @@ class GRASPSolver{
     struct Options{
         Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
         int iterations = 1;
-        double coverage = 0.0;
         double chose_from = 0.25;
         Options() = default;
         explicit Options(std::vector<std::string> & args);
@@ -198,26 +197,35 @@ class GreedyHeuristicSearchSolver{
     GreedyHeuristicSearchSolver() = delete;
     struct Options{
         Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
-        double coverage = 0.25;
+        double coverage = -1.0;
+        int to_visit = 2;
         Options() = default;
         explicit Options(std::vector<std::string> & args);
     };
 
     /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
     /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
+    /// @param amount_to_visit for initial call pass `options.to_visit`
+    static Solution Universal(const PackagedProblem & problem, const Solution & current_solution, std::vector<int> sorted_item_ids, const int & amount_to_visit);
+    static Solution AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, std::vector<int> sorted_item_ids, const int & amount_to_visit);
+    /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
+    /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
     /// @param amount_to_visit for initial call pass `options.coverage * problem.items.size()`
-    static Solution IgnoreConnectionsDFS(const PackagedProblem & problem, const Solution & current_solution, const std::vector<int> & sorted_item_ids, const int & amount_to_visit);
+    /// @deprecated use `Universal()`
+    static Solution AccurateIgnoreConnectionsDFS(const PackagedProblem & problem, const Solution & current_solution, std::vector<int> sorted_item_ids, const int & amount_to_visit);
     /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
     /// @param previous_item_id for initial call pass `-1` - this will omit checking if previous item has connection to the next one in inial call.
     /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
     /// @param amount_to_visit for initial call pass `options.coverage * problem.items.size()`
-    static Solution PathDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const std::vector<int> & sorted_item_ids, const int & amount_to_visit);
+    /// @deprecated use `Universal()`
+    static Solution AccuratePathDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, std::vector<int> sorted_item_ids, const int & amount_to_visit);
     /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
     /// @param previous_item_id for initial call pass `-1` - this will omit checking if previous item has connection to the next one in inial call.
     /// @param start_item_id for initial call pass `-1`
     /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
     /// @param amount_to_visit for initial call pass `options.coverage * problem.items.size()`
-    static Solution CycleDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const int & start_item_id, const std::vector<int> & sorted_item_ids, const int & amount_to_visit);
+    /// @deprecated use `Universal()`
+    static Solution AccurateCycleDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const int & start_item_id, std::vector<int> sorted_item_ids, const int & amount_to_visit);
 
     static Solution Universal(const PackagedProblem & problem, const Options & options);
 

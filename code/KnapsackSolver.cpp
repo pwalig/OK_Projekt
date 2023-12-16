@@ -100,8 +100,7 @@ void KnapsackSolver::RunMassTests(const std::vector<Problem::GenerationSettings>
 
                 // GRASP
                 GRASPSolver::Options grasp_op;
-                grasp_op.iterations = -1;
-                grasp_op.coverage = 0.1;
+                grasp_op.iterations = 100;
                 if (gsv[i].instance_size < 20) sdv[t].solutions.push_back(Solve<GRASPSolver>(pp, grasp_op));
                 else sdv[t].solutions.push_back(PackagedSolution());
                 cout << "grasp";
@@ -226,7 +225,7 @@ void MassTestResult::AddSolution(const PackagedSolution & ps, const int & optimu
 void MassTestResult::DivideByAmount(){
     // averages
     // main
-    this->overall_quality = static_cast<double>(this->opt_max_value_sum) / static_cast<double>(this->max_value);
+    this->overall_quality = static_cast<double>(this->opt_max_value_sum) / this->max_value;
     this->solve_time /= this->amount;
     this->quality /= this->amount;
     this->max_value /= this->amount;
@@ -831,29 +830,13 @@ bool GRASPSolver::expect_perfection = false;
 string GRASPSolver::GetAlgorithmName(const Options & options){
     string name = "grasp-" + ToString(options.sort_mode);
     name += "_chose-from-" + std::to_string(options.chose_from);
-
-    if (options.iterations > 0) {
-        if (options.coverage > 0.0) throw std::invalid_argument("both iteratations and coverage are positive");
-        else name += "_iterations-" + std::to_string(options.iterations);
-    }
-    else {
-        if (options.coverage > 0.0) name += "_coverage-" + std::to_string(options.coverage);
-        else throw std::invalid_argument("both iteratations and coverage are non positive");
-    }
+    name += "_iterations-" + std::to_string(options.iterations);
 
     return name;
 }
 
 PackagedSolution GRASPSolver::Solve(PackagedProblem & problem, Options options){
     PackagedSolution ps;
-
-    if (options.iterations > 0) {
-        if (options.coverage > 0.0) throw std::invalid_argument("both iteratations and coverage are positive");
-    }
-    else {
-        if (options.coverage > 0.0) options.iterations = static_cast<double>(pow(2, problem.problem.items.size())) * options.coverage;
-        else throw std::invalid_argument("both iteratations and coverage are non positive");
-    }
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
@@ -912,41 +895,21 @@ bool GreedyHeuristicSearchSolver::expect_perfection = false;
 
 string GreedyHeuristicSearchSolver::GetAlgorithmName(const Options & options){
     string name = "greedy-heuristic-search-sort-by-" + ToString(options.sort_mode);
-    name += "_coverage-" + std::to_string(options.coverage);
+    if (options.to_visit <= 0) name += "_coverage-" + std::to_string(options.coverage);
+    else name += "_to-visit-" + std::to_string(options.to_visit);
     return name;
 }
 
 PackagedSolution GreedyHeuristicSearchSolver::Solve(PackagedProblem & problem, const Options & options){
     PackagedSolution ps;
+
+    int visit_amount = options.to_visit > 0 ? options.to_visit : (static_cast<double>(problem.problem.items.size()) * options.coverage);
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
-    switch (problem.requirements.structureToFind) {
-
-    case Problem::Requirements::StructureToFind::IGNORE_CONNECTIONS: {
-        start = std::chrono::steady_clock::now();
-        ps.solution = IgnoreConnectionsDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
-        end = std::chrono::steady_clock::now();
-        break;
-    }
-    case Problem::Requirements::StructureToFind::PATH: {
-        start = std::chrono::steady_clock::now();
-        ps.solution = PathDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), -1, problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
-        end = std::chrono::steady_clock::now();
-        break;
-    }
-    case Problem::Requirements::StructureToFind::CYCLE: {
-        start = std::chrono::steady_clock::now();
-        ps.solution = CycleDFS(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), -1, -1, problem.problem.GetSortedItemIds(options.sort_mode), problem.problem.items.size() * options.coverage);
-        end = std::chrono::steady_clock::now();
-        break;
-    }
-    
-    default: {
-        throw std::logic_error("not implemented yet");
-        break;
-    }
-    }
+    start = std::chrono::steady_clock::now();
+    ps.solution = AccurateUniversal(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds(options.sort_mode), visit_amount);
+    end = std::chrono::steady_clock::now();
 
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
@@ -954,7 +917,52 @@ PackagedSolution GreedyHeuristicSearchSolver::Solve(PackagedProblem & problem, c
     return ps;
 }
 
-Solution GreedyHeuristicSearchSolver::PathDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+Solution GreedyHeuristicSearchSolver::Universal(const PackagedProblem & problem, const Solution & current_solution, vector<int> sorted_item_ids, const int & amount_to_visit) {
+    Solution global_solution(current_solution);
+    int total_visits = 0;
+    while (total_visits < amount_to_visit && sorted_item_ids.size() > 0) {
+        ++total_visits;
+
+        int current_item_id = sorted_item_ids[0];
+        sorted_item_ids.erase(sorted_item_ids.begin());
+
+        if (current_solution.selected[current_item_id]) continue;
+        if (!current_solution.Fits(problem.problem, current_item_id)) continue;
+
+        Solution temp_solution(current_solution);
+        temp_solution.AddItem(problem.problem, current_item_id);
+        if (!temp_solution.IsStructurePossible(problem)) continue;
+        temp_solution = Universal(problem, temp_solution, sorted_item_ids, amount_to_visit);
+        if (temp_solution.IsStructure(problem) && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+    }
+    return global_solution;
+}
+
+Solution GreedyHeuristicSearchSolver::AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, vector<int> sorted_item_ids, const int & amount_to_visit) {
+    Solution global_solution(current_solution);
+    int counted_visits = 0;
+    while (counted_visits < amount_to_visit && sorted_item_ids.size() > 0) {
+
+        int current_item_id = sorted_item_ids[0];
+        sorted_item_ids.erase(sorted_item_ids.begin());
+
+        if (!current_solution.Fits(problem.problem, current_item_id)) continue;// if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
+
+        Solution temp_solution(current_solution);
+        temp_solution.AddItem(problem.problem, current_item_id);
+        if (!temp_solution.IsStructurePossible(problem)) continue; // if achieving strucutre is not possible dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items are separated
+        temp_solution = AccurateUniversal(problem, temp_solution, sorted_item_ids, amount_to_visit);
+        if (!temp_solution.IsStructure(problem)) continue;
+        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+    
+        ++counted_visits;
+    }
+    return global_solution;
+}
+
+// Accurate method versions
+
+Solution GreedyHeuristicSearchSolver::AccuratePathDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, vector<int> sorted_item_ids, const int & amount_to_visit) {
     Solution global_solution(current_solution);
     int counted_visits = 0;
     int total_visits = 0;
@@ -962,15 +970,15 @@ Solution GreedyHeuristicSearchSolver::PathDFS(const PackagedProblem & problem, c
         ++total_visits;
 
         int current_item_id = sorted_item_ids[total_visits-1];
+        sorted_item_ids.erase(sorted_item_ids.begin() + total_visits-1);
+
         if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
         if (previous_item_id >= 0 && !problem.problem.items[previous_item_id].HasConnectionTo(current_item_id)) continue; // if item does not have a connection dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items are separated
         if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
 
         Solution temp_solution(current_solution);
         temp_solution.AddItem(problem.problem, current_item_id);
-        vector<int> new_sorted_item_ids(sorted_item_ids);
-        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
-        temp_solution = PathDFS(problem, temp_solution, current_item_id, new_sorted_item_ids, amount_to_visit);
+        temp_solution = AccuratePathDFS(problem, temp_solution, current_item_id, sorted_item_ids, amount_to_visit);
         if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
 
         ++counted_visits;
@@ -978,7 +986,7 @@ Solution GreedyHeuristicSearchSolver::PathDFS(const PackagedProblem & problem, c
     return global_solution;
 }
 
-Solution GreedyHeuristicSearchSolver::CycleDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const int & start_item_id, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+Solution GreedyHeuristicSearchSolver::AccurateCycleDFS(const PackagedProblem & problem, const Solution & current_solution, const int & previous_item_id, const int & start_item_id, vector<int> sorted_item_ids, const int & amount_to_visit) {
     Solution global_solution(current_solution);
     int counted_visits = 0;
     int total_visits = 0;
@@ -986,15 +994,15 @@ Solution GreedyHeuristicSearchSolver::CycleDFS(const PackagedProblem & problem, 
         ++total_visits;
 
         int current_item_id = sorted_item_ids[total_visits-1];
+        sorted_item_ids.erase(sorted_item_ids.begin() + total_visits-1);
+
         if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
         if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
 
         Solution temp_solution(current_solution);
         temp_solution.AddItem(problem.problem, current_item_id);
         if (!temp_solution.IsCyclePossible(problem.problem)) continue;
-        vector<int> new_sorted_item_ids(sorted_item_ids);
-        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
-        temp_solution = CycleDFS(problem, temp_solution, current_item_id, start_item_id >= 0 ? start_item_id : current_item_id, new_sorted_item_ids, amount_to_visit);
+        temp_solution = AccurateCycleDFS(problem, temp_solution, current_item_id, start_item_id >= 0 ? start_item_id : current_item_id, sorted_item_ids, amount_to_visit);
         if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
 
         ++counted_visits;
@@ -1002,7 +1010,7 @@ Solution GreedyHeuristicSearchSolver::CycleDFS(const PackagedProblem & problem, 
     return global_solution;
 }
 
-Solution GreedyHeuristicSearchSolver::IgnoreConnectionsDFS(const PackagedProblem & problem, const Solution & current_solution, const vector<int> & sorted_item_ids, const int & amount_to_visit) {
+Solution GreedyHeuristicSearchSolver::AccurateIgnoreConnectionsDFS(const PackagedProblem & problem, const Solution & current_solution, vector<int> sorted_item_ids, const int & amount_to_visit) {
     Solution global_solution(current_solution);
     int counted_visits = 0;
     int total_visits = 0;
@@ -1010,14 +1018,14 @@ Solution GreedyHeuristicSearchSolver::IgnoreConnectionsDFS(const PackagedProblem
         ++total_visits;
 
         int current_item_id = sorted_item_ids[total_visits-1];
+        sorted_item_ids.erase(sorted_item_ids.begin() + total_visits-1);
+
         if (current_solution.selected[current_item_id]) continue; // if item is already selected dont count as visit otherwise algorithm would add at most amount_to_visit items to every solution it finds
         if (!current_solution.Fits(problem.problem, current_item_id)) continue; // if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
 
         Solution temp_solution(current_solution);
         temp_solution.AddItem(problem.problem, current_item_id);
-        vector<int> new_sorted_item_ids(sorted_item_ids);
-        new_sorted_item_ids.erase(new_sorted_item_ids.begin() + total_visits - 1);
-        temp_solution = IgnoreConnectionsDFS(problem, temp_solution, new_sorted_item_ids, amount_to_visit);
+        temp_solution = AccurateIgnoreConnectionsDFS(problem, temp_solution, sorted_item_ids, amount_to_visit);
         if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
 
         ++counted_visits;

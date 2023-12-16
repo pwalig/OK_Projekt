@@ -84,15 +84,8 @@ GreedySolver::Options::Options(std::vector<std::string> & args){
 }
 
 GRASPSolver::Options::Options(std::vector<std::string> & args){
-    // coverage
-    CommandInterpreter::Consume<GRASPSolver::Options>(args, "-coverage", [](const string & arg, GRASPSolver::Options & op){
-        op.coverage = std::stod(arg);
-        if (op.coverage <= 0.0) throw std::invalid_argument("grasp coverage should be positive");
-        op.iterations = 0;
-    }, *this);
     // iterations
     CommandInterpreter::Consume<GRASPSolver::Options>(args, "-iterations", [](const string & arg, GRASPSolver::Options & op){
-        if (op.coverage > 0.0) throw std::invalid_argument("attempted to set iterations and coverage simultaneously");
         op.iterations = std::stod(arg);
         if (op.iterations <= 0) throw std::invalid_argument("grasp iterations should be positive");
     }, *this);
@@ -108,9 +101,14 @@ GRASPSolver::Options::Options(std::vector<std::string> & args){
 
 GreedyHeuristicSearchSolver::Options::Options(std::vector<std::string> & args){
     // coverage
-    CommandInterpreter::Consume<double>(args, "-coverage", [](const string & arg, double & dbl){
-        dbl = std::stod(arg);
-    }, this->coverage);
+    CommandInterpreter::Consume<GreedyHeuristicSearchSolver::Options>(args, "-coverage", [](const string & arg, GreedyHeuristicSearchSolver::Options & op){
+        op.to_visit = -1;
+        op.coverage = std::stod(arg);
+    }, *this);
+    // to-visit
+    CommandInterpreter::Consume<int>(args, "-to-visit", [](const string & arg, int & tvs){
+        tvs = std::stod(arg);
+    }, this->to_visit);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
         sm = ToSortMode(arg);
@@ -243,6 +241,14 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
     }
     case Command::BATCH_SOLVE:{
         string algorithm = Consume(args, 1);
+        
+        /* would be nice
+        bool fake;
+        Consume(args, "-fake", [&fake](){
+            fake = true;
+        }); should create placeholder folder with algo name and solve-info.json
+        */
+
         if (algorithm == "greedy") BatchSolveFromArgs<GreedySolver>(args);
         else if (algorithm == "greedy-heuristic-search") BatchSolveFromArgs<GreedyHeuristicSearchSolver>(args);
         else if (algorithm == "grasp") BatchSolveFromArgs<GRASPSolver>(args);

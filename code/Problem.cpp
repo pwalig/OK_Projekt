@@ -127,7 +127,7 @@ vector<Item> Problem::GenerateItemsVector(const int & instance_size, const int &
 
         for (int j = 0; j < instance_size; ++j){
             if (j == i) continue;
-            if (RandomT<double>(0.0, 1.0) <= connection_density) c.push_back(j);
+            if (RandomT01<double>() <= connection_density) c.push_back(j);
         }
         Item item(rand() % value_limit_exclusive, w, c);
         out.push_back(item);
@@ -143,7 +143,7 @@ void Problem::GenerateInnerItems(const int & instance_size, const int & sub_knap
 
         for (int j = 0; j < instance_size; ++j){
             if (j == i) continue;
-            if (RandomT<double>(0.0, 1.0) <= connection_density) c.push_back(j);
+            if (RandomT01<double>() <= connection_density) c.push_back(j);
         }
         Item item(rand() % value_limit_exclusive, w, c);
         items.push_back(item);
