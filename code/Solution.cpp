@@ -94,14 +94,14 @@ bool Solution::IsFit(const Problem & problem) const{
     return true;
 }
 
-bool Solution::IsPathDFS(const Problem & problem, vector<int> & visited, const int & current, const int & length) const{
+bool Solution::IsPathDFS(const Problem & problem, vector<bool> & visited, const int & current, const int & length, const int & depth) const{
     for (int next : problem.items[current].connections) {
-        if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
-            visited.push_back(next);
-            if (visited.size() == length) return true; // path found
-            if (visited.size() > length) return false; // path would have to be to long
-            if (IsPathDFS(problem, visited, next, length)) return true; // path found later
-            visited.pop_back();
+        if (selected[next] && !visited[next]){ // next item has to be selected and new
+            visited[next] = true;
+            if (depth == length) return true; // path found
+            if (depth > length) return false; // path would have to be to long
+            if (IsPathDFS(problem, visited, next, length, depth + 1)) return true; // path found later
+            visited[next] = false;
         }
     }
     return false; // path not found
@@ -117,25 +117,25 @@ bool Solution::IsPath(const Problem & problem) const{
     if (length <= 1) return true;
     
     // check from each starting point
-    vector<int> visited;
+    vector<bool> visited(selected.size(), false);
     for (int i = 0; i < selected.size(); ++i) {
         if (selected[i]){
-            visited.push_back(i);
-            if (IsPathDFS(problem, visited, i, length)) return true; // path found somewhere
-            visited.pop_back();
+            visited[i] = true;
+            if (IsPathDFS(problem, visited, i, length, 2)) return true; // path found somewhere
+            visited[i] = false;
         }
     }
     return false;
 }
 
-bool Solution::IsCycleDFS(const Problem & problem, vector<int> & visited, const int & current, const int & start, const int & length) const{
+bool Solution::IsCycleDFS(const Problem & problem, vector<bool> & visited, const int & current, const int & start, const int & length, const int & depth) const{
     for (int next : problem.items[current].connections) {
-        if (selected[next] && std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be selected and new
-            visited.push_back(next);
-            if (visited.size() == length && problem.items[next].HasConnectionTo(start)) return true; // cycle found
-            if (visited.size() > length) return false; // cycle would have to be to long
-            if (IsCycleDFS(problem, visited, next, start, length)) return true; // cycle found later
-            visited.pop_back();
+        if (selected[next] && !visited[next]){ // next item has to be selected and new
+            visited[next] = true;
+            if (depth == length && problem.items[next].HasConnectionTo(start)) return true; // cycle found
+            if (depth > length) return false; // cycle would have to be to long
+            if (IsCycleDFS(problem, visited, next, start, length, depth + 1)) return true; // cycle found later
+            visited[next] = false;
         }
     }
     return false; // cycle not found
@@ -151,13 +151,13 @@ bool Solution::IsCycle(const Problem & problem) const{
     if (length == 0) return true;
     
     // check from each starting point
-    vector<int> visited;
+    vector<bool> visited(selected.size(), false);
     for (int i = 0; i < selected.size(); ++i) {
         if (selected[i]){
             if (length == 1) return problem.items[i].HasConnectionTo(i);
-            visited.push_back(i);
-            if (IsCycleDFS(problem, visited, i, i, length)) return true; // cycle found somewhere
-            visited.pop_back();
+            visited[i] = true;
+            if (IsCycleDFS(problem, visited, i, i, length, 2)) return true; // cycle found somewhere
+            visited[i] = false;
         }
     }
     return false;
@@ -205,38 +205,37 @@ bool Solution::IsValid(const PackagedProblem & problem) const{
     return IsFit(problem.problem) && IsStructure(problem);
 }
 
-bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, const vector<int> & _remaining_space, const int & current, const int & start) const{
+bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<bool> & visited, const vector<int> & _remaining_space, const int & current, const int & start) const{
     for (int next : problem.items[current].connections) {
-        if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
+        if (visited[next]) continue; // next item has to be new (not visited yet)
 
-            bool fit = true;
-            vector<int> new_remaining_space(_remaining_space);
-            for (int j = 0; j < new_remaining_space.size(); ++j){
-                if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
-                else { fit = false; break; }
-            }
-            if (!fit) continue;
-
-            visited.push_back(next);
-            if (problem.items[next].HasConnectionTo(start)){ // found some cycle lets check if it has all selected vertices
-                bool _found = true;
-                for (int i = 0; i < this->selected.size(); ++i){
-                    if (this->selected[i] && std::find(visited.begin(), visited.end(), i) == visited.end()){
-                        _found = false;
-                        break;
-                    }
-                }
-                if (_found) return true; // it has - cycle found
-            }
-            if (IsCyclePossibleDFS(problem, visited, new_remaining_space, next, start)) return true; // cycle found later
-            visited.pop_back();
+        bool fit = true;
+        vector<int> new_remaining_space(_remaining_space);
+        for (int j = 0; j < new_remaining_space.size(); ++j){
+            if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
+            else { fit = false; break; }
         }
+        if (!fit) continue;
+
+        visited[next] = true;
+        if (problem.items[next].HasConnectionTo(start)){ // is it a cycle (closed path)
+            bool _found = true; // found some cycle lets check if it has all selected vertices
+            for (int i = 0; i < this->selected.size(); ++i){
+                if (this->selected[i] && !visited[i]){
+                    _found = false;
+                    break;
+                }
+            }
+            if (_found) return true; // it has - cycle found
+        }
+        if (IsCyclePossibleDFS(problem, visited, new_remaining_space, next, start)) return true; // cycle found later
+        visited[next] = false;
     }
     return false; // cycle not found
 }
 bool Solution::IsCyclePossible(const Problem & problem) const{
     if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
-    vector<int> visited;
+    vector<bool> visited(selected.size(), false);
     for(int i = 0; i < selected.size(); ++i){
         
         bool fit = true;
@@ -247,56 +246,72 @@ bool Solution::IsCyclePossible(const Problem & problem) const{
         } 
         if (!fit) continue;
 
-        visited.push_back(i);
-        if (IsCyclePossibleDFS(problem, visited, _remaining_space, i, i)) return true; // cycle found somewhere
-        visited.pop_back();
-    }
-    return false;
-}
-
-bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited, const vector<int> & _remaining_space, const int & current) const{
-    for (int next : problem.items[current].connections) {
-        if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
-
-#ifdef IS_PATH_DEBUG
-            cout << " ->" << next;
-#endif
-
-            bool fit = true;
-            vector<int> new_remaining_space(_remaining_space);
-            for (int j = 0; j < new_remaining_space.size(); ++j){
-                if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
-                else { fit = false; break; }
-            }
-            if (!fit) {
-#ifdef IS_PATH_DEBUG
-                cout << next << ">" << _remaining_space[0];
-#endif
-                continue;
-            }
-
-            visited.push_back(next);
-            // found some path lets check if it has all selected vertices
-            bool _found = true;
-            for (int i = 0; i < this->selected.size(); ++i){
-                if (this->selected[i] && std::find(visited.begin(), visited.end(), i) == visited.end()){
+        visited[i] = true;
+        if (problem.items[i].HasConnectionTo(i)){ // is it a cycle (closed path)
+            bool _found = true; // found some cycle lets check if it has all selected vertices
+            for (int j = 0; j < this->selected.size(); ++j){
+                if (this->selected[j] && j != i){ 
                     _found = false;
                     break;
                 }
             }
-            if (_found) return true; // it has - path found
-            if (IsPathPossibleDFS(problem, visited, new_remaining_space, next)) return true; // path found later
-            visited.pop_back();
-#ifdef IS_PATH_DEBUG
-            cout << " <-" << next;
-#endif
+            if (_found) return true; // it has - cycle found
         }
+        if (IsCyclePossibleDFS(problem, visited, _remaining_space, i, i)) return true; // cycle found somewhere
+        visited[i] = false;
+    }
+    return false;
+}
+
+bool Solution::IsPathPossibleDFS(const Problem & problem, vector<bool> & visited, const vector<int> & _remaining_space, const int & current) const{
+    for (int next : problem.items[current].connections) {
+        if (visited[next]) continue; // next item has to be new (not visited yet)
+
+#ifdef IS_PATH_DEBUG
+        cout << " ->" << next;
+#endif
+
+        bool fit = true;
+        vector<int> new_remaining_space(_remaining_space);
+        for (int j = 0; j < new_remaining_space.size(); ++j){
+            if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
+            else { fit = false; break; }
+        }
+        if (!fit) {
+#ifdef IS_PATH_DEBUG
+            cout << next << ">" << _remaining_space[0];
+#endif
+            continue;
+        }
+
+        visited[next] = true;
+        // found some path lets check if it has all selected vertices
+        bool _found = true;
+        for (int i = 0; i < this->selected.size(); ++i){
+            if (this->selected[i] && !visited[i]){
+                _found = false;
+                break;
+            }
+        }
+        if (_found) {
+#ifdef IS_PATH_DEBUG
+            cout << " path:";
+            for (int j = 0; j < visited.size(); ++j) if (visited[j]) cout << " " << j;
+#endif
+            return true;
+        } // it has - path found
+        if (IsPathPossibleDFS(problem, visited, new_remaining_space, next)) return true; // path found later
+        visited[next] = false;
+#ifdef IS_PATH_DEBUG
+        cout << " <-" << next;
+#endif
     }
     return false; // cycle not found
 }
 bool Solution::IsPathPossible(const Problem & problem) const{
     if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
-    vector<int> visited;
+    vector<bool> visited(selected.size(), false);
+
     for(int i = 0; i < selected.size(); ++i){
         
         bool fit = true;
@@ -307,21 +322,21 @@ bool Solution::IsPathPossible(const Problem & problem) const{
         } 
         if (!fit) continue;
 
-        visited.push_back(i);
+        visited[i] = true;
 #ifdef IS_PATH_DEBUG
         cout << "\n->>" << i;
 #endif
         // found some path lets check if it has all selected vertices
         bool _found = true;
         for (int j = 0; j < this->selected.size(); ++j){
-            if (this->selected[j] && std::find(visited.begin(), visited.end(), j) == visited.end()){
+            if (this->selected[j] && j != i){
                 _found = false;
                 break;
             }
         }
-        if (_found) return true; // it has - path found
+        if (_found) { return true; } // it has - path found
         if (IsPathPossibleDFS(problem, visited, _remaining_space, i)) return true; // cycle found somewhere
-        visited.pop_back();
+        visited[i] = false;
 #ifdef IS_PATH_DEBUG
         cout << " <-" << i;
 #endif

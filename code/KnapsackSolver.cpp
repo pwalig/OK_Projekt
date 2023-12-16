@@ -531,14 +531,14 @@ Solution GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Opt
     for (int i = 0; i < isiz; ++i){
         int current_item_id = sortedItemIds[i];
 #ifdef GREEDY_DEBUG
-        cout << current_item_id << " ";
+        cout << endl << current_item_id << " ";
 #endif
         
         if (global_solution.Fits(problem.problem, current_item_id)){
             global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
             if (!global_solution.IsStructurePossible(problem)) global_solution.RemoveItem(problem.problem, current_item_id); // if adding it would make it impossible to construct a valid answer then remove it
 #ifdef GREEDY_DEBUG
-            else cout << "added ";
+            else cout << " added";
 #endif
         }
     }
@@ -908,7 +908,7 @@ string GreedyHeuristicSearchSolver::GetAlgorithmName(const Options & options){
 
     if (options.fast) name += "_fast";
     else name += "_accurate";
-    
+
     return name;
 }
 

@@ -287,7 +287,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
             // sub knackpacks
             else if ((*it) == "-subk") gs.sub_knapsacks = std::stoi(*(++it));
             // knapsack size limit
-            else if ((*it) == "-maxks") { gs.knapsack_size_limit_exclusive = std::stoi(*(++it)); gs.randomize_knapsack_sizes = true; }
+            else if ((*it) == "-maxks") { gs.knapsack_size_limit_exclusive = std::stoi(*(++it)); }
             // value limit
             else if ((*it) == "-maxv") gs.value_limit_exclusive = std::stoi(*(++it));
             // weight limit
@@ -333,7 +333,7 @@ void CommandInterpreter::InterpretCommand(const string & command, vector<string>
             for (auto const& dir_entry : std::filesystem::directory_iterator{dir}){
                 if (!std::filesystem::is_directory(dir_entry)) continue;
                 if (dir_entry.path().stem().string() == "problems") continue;
-                fout << dir_entry.path().stem().string() << " ^ ";
+                fout << dir_entry.path().filename().string() << " ^ ";
             }
         }
         fout << endl << "| " << dir.stem().string() << " | ";
