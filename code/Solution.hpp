@@ -10,9 +10,9 @@ class Solution {
     bool IsPathDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & length) const;
     bool IsCycleDFS(const Problem & problem, std::vector<int> & visited, const int & current, const int & start, const int & length) const;
     /// @brief Should not be called by anything else than `IsCyclePossible()`
-    bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, std::vector<int> _remaining_space, const int & current, const int & start) const;
+    bool IsCyclePossibleDFS(const Problem & problem, std::vector<int> & visited, const std::vector<int> & _remaining_space, const int & current, const int & start) const;
     /// @brief Should not be called by anything else than `IsPathPossible()`
-    bool IsPathPossibleDFS(const Problem & problem, std::vector<int> & visited, std::vector<int> _remaining_space, const int & current) const;
+    bool IsPathPossibleDFS(const Problem & problem, std::vector<int> & visited, const std::vector<int> & _remaining_space, const int & current) const;
 
     public:
     int max_value;

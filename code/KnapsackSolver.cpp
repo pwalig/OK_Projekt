@@ -21,6 +21,7 @@
 using namespace knapsack_solver;
 using std::vector;
 using std::string;
+using std::deque;
 using std::ostream;
 using std::cout;
 using std::endl;
@@ -525,14 +526,20 @@ PackagedSolution GreedySolver::Solve(PackagedProblem & problem, const Options & 
 Solution GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Options & options) {
     int isiz = problem.problem.items.size();
     Solution global_solution(isiz, problem.problem.knapsack_sizes); // create empty solution
-    vector<int> sortedItemIds = problem.problem.GetSortedItemIds(options.sort_mode);
+    vector<int> sortedItemIds = problem.problem.GetSortedItemIds<vector<int>>(options.sort_mode);
     
     for (int i = 0; i < isiz; ++i){
         int current_item_id = sortedItemIds[i];
+#ifdef GREEDY_DEBUG
+        cout << current_item_id << " ";
+#endif
         
         if (global_solution.Fits(problem.problem, current_item_id)){
             global_solution.AddItem(problem.problem, current_item_id); // if current item fits add it to the current solution
             if (!global_solution.IsStructurePossible(problem)) global_solution.RemoveItem(problem.problem, current_item_id); // if adding it would make it impossible to construct a valid answer then remove it
+#ifdef GREEDY_DEBUG
+            else cout << "added ";
+#endif
         }
     }
     
@@ -542,7 +549,7 @@ Solution GreedySolver::NaiveUniversal(const PackagedProblem & problem, const Opt
 Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Options & options) {
     int isiz = problem.problem.items.size();
     Solution global_solution(isiz, problem.problem.knapsack_sizes); // create empty solution
-    vector<int> sortedItemIds = problem.problem.GetSortedItemIds(options.sort_mode);
+    vector<int> sortedItemIds = problem.problem.GetSortedItemIds<vector<int>>(options.sort_mode);
 
     switch (problem.requirements.structureToFind)
     {
@@ -632,7 +639,7 @@ Solution GreedySolver::GreedyUniversal(const PackagedProblem & problem, const Op
 Solution GreedySolver::GreedyIgnoreConnections(const Problem & problem, const Options & options){
     int isiz = problem.items.size();
     Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
-    vector<int> sortedItemIds = problem.GetSortedItemIds(options.sort_mode);
+    vector<int> sortedItemIds = problem.GetSortedItemIds<vector<int>>(options.sort_mode);
 
     for (int i = 0; i < isiz; ++i){
         int current_item_id = sortedItemIds[i];
@@ -647,7 +654,7 @@ Solution GreedySolver::GreedyIgnoreConnections(const Problem & problem, const Op
 Solution GreedySolver::GreedyPath(const Problem & problem, const Options & options) {
     int isiz = problem.items.size();
     Solution global_solution(isiz, problem.knapsack_sizes); // create empty solution
-    vector<int> sortedItemIds = problem.GetSortedItemIds(options.sort_mode);
+    vector<int> sortedItemIds = problem.GetSortedItemIds<vector<int>>(options.sort_mode);
 
     for (int i = 0; i < isiz; ){
         int current_item_id = sortedItemIds[i];
@@ -860,7 +867,7 @@ PackagedSolution GRASPSolver::Solve(PackagedProblem & problem, Options options){
 
 Solution GRASPSolver::Universal(const PackagedProblem & problem, const Options & options) {
     Solution global_solution(problem.problem.items.size(), problem.problem.knapsack_sizes);
-    vector<int> sorted_item_ids = problem.problem.GetSortedItemIds(options.sort_mode);
+    vector<int> sorted_item_ids = problem.problem.GetSortedItemIds<vector<int>>(options.sort_mode);
     int amount_to_chose_from = problem.problem.items.size() * options.chose_from;
     while (sorted_item_ids.size() > 0) {
         int pick = std::rand() % std::min(amount_to_chose_from, static_cast<int>(sorted_item_ids.size()));
@@ -895,8 +902,13 @@ bool GreedyHeuristicSearchSolver::expect_perfection = false;
 
 string GreedyHeuristicSearchSolver::GetAlgorithmName(const Options & options){
     string name = "greedy-heuristic-search-sort-by-" + ToString(options.sort_mode);
+
     if (options.to_visit <= 0) name += "_coverage-" + std::to_string(options.coverage);
     else name += "_to-visit-" + std::to_string(options.to_visit);
+
+    if (options.fast) name += "_fast";
+    else name += "_accurate";
+    
     return name;
 }
 
@@ -907,9 +919,16 @@ PackagedSolution GreedyHeuristicSearchSolver::Solve(PackagedProblem & problem, c
     
     // run with time measure
     std::chrono::steady_clock::time_point start, end;
-    start = std::chrono::steady_clock::now();
-    ps.solution = AccurateUniversal(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds(options.sort_mode), visit_amount);
-    end = std::chrono::steady_clock::now();
+    if (options.fast){
+        start = std::chrono::steady_clock::now();
+        ps.solution = FastUniversal(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds<deque<int>>(options.sort_mode), visit_amount);
+        end = std::chrono::steady_clock::now();
+    }
+    else {
+        start = std::chrono::steady_clock::now();
+        ps.solution = AccurateUniversal(problem, Solution(problem.problem.items.size(), problem.problem.knapsack_sizes), problem.problem.GetSortedItemIds<deque<int>>(options.sort_mode), visit_amount);
+        end = std::chrono::steady_clock::now();
+    }
 
     const std::chrono::duration<double> elapsed_seconds{end - start};
     ps.solve_time = std::chrono::duration<double>(elapsed_seconds).count();
@@ -917,45 +936,51 @@ PackagedSolution GreedyHeuristicSearchSolver::Solve(PackagedProblem & problem, c
     return ps;
 }
 
-Solution GreedyHeuristicSearchSolver::Universal(const PackagedProblem & problem, const Solution & current_solution, vector<int> sorted_item_ids, const int & amount_to_visit) {
+Solution GreedyHeuristicSearchSolver::FastUniversal(const PackagedProblem & problem, const Solution & current_solution, deque<int> sorted_item_ids, int amount_to_visit) {
     Solution global_solution(current_solution);
-    int total_visits = 0;
-    while (total_visits < amount_to_visit && sorted_item_ids.size() > 0) {
-        ++total_visits;
+    while (amount_to_visit > 0 && sorted_item_ids.size() > 0) {
+        --amount_to_visit;
 
         int current_item_id = sorted_item_ids[0];
-        sorted_item_ids.erase(sorted_item_ids.begin());
+        sorted_item_ids.pop_front();
 
-        if (current_solution.selected[current_item_id]) continue;
         if (!current_solution.Fits(problem.problem, current_item_id)) continue;
 
         Solution temp_solution(current_solution);
         temp_solution.AddItem(problem.problem, current_item_id);
         if (!temp_solution.IsStructurePossible(problem)) continue;
-        temp_solution = Universal(problem, temp_solution, sorted_item_ids, amount_to_visit);
-        if (temp_solution.IsStructure(problem) && temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
+        temp_solution = FastUniversal(problem, temp_solution, sorted_item_ids, std::max(amount_to_visit, 1));
+        if (temp_solution.max_value >= global_solution.max_value) global_solution = temp_solution;
     }
     return global_solution;
 }
 
-Solution GreedyHeuristicSearchSolver::AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, vector<int> sorted_item_ids, const int & amount_to_visit) {
+Solution GreedyHeuristicSearchSolver::AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, deque<int> sorted_item_ids, int amount_to_visit) {
     Solution global_solution(current_solution);
-    int counted_visits = 0;
-    while (counted_visits < amount_to_visit && sorted_item_ids.size() > 0) {
+    while (amount_to_visit > 0 && sorted_item_ids.size() > 0) {
 
         int current_item_id = sorted_item_ids[0];
-        sorted_item_ids.erase(sorted_item_ids.begin());
+#ifdef GHS_DEBUG
+        for (int tab = 0; tab < amount_to_visit; ++tab) cout <<"\t";
+        cout << "\nenter: " << current_item_id;
+#endif
+        sorted_item_ids.pop_front();
 
         if (!current_solution.Fits(problem.problem, current_item_id)) continue;// if item does not fit dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items dont fit
-
+#ifdef GHS_DEBUG
+        cout << "f";
+#endif
         Solution temp_solution(current_solution);
         temp_solution.AddItem(problem.problem, current_item_id);
         if (!temp_solution.IsStructurePossible(problem)) continue; // if achieving strucutre is not possible dont count as visit otherwise algorithm would give empty answer if first amout_to_visit items are separated
-        temp_solution = AccurateUniversal(problem, temp_solution, sorted_item_ids, amount_to_visit);
-        if (!temp_solution.IsStructure(problem)) continue;
-        if (temp_solution.max_value > global_solution.max_value) global_solution = temp_solution;
-    
-        ++counted_visits;
+#ifdef GHS_DEBUG
+        cout << "s";
+#endif
+        temp_solution = AccurateUniversal(problem, temp_solution, sorted_item_ids, std::max(--amount_to_visit, 1));
+#ifdef GHS_DEBUG
+        cout << " exit: " << current_item_id;
+#endif
+        if (temp_solution.max_value >= global_solution.max_value) global_solution = temp_solution;
     }
     return global_solution;
 }

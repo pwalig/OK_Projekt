@@ -3,6 +3,7 @@
 #include <iostream> // std::ostream
 #include <vector>
 #include <string>
+#include <algorithm> // std::sort, std::find
 #include "DebugDefines.hpp"
 
 
@@ -74,9 +75,73 @@ class Problem {
 
     enum class SortMode {VALUE_WEIGHT_RATIO, WEIGHT, VALUE, RANDOM, DONT_SORT};
     
-    std::vector<int> GetSortedItemIds(const SortMode & sortMode) const;
+    template<typename T> T GetSortedItemIds(const SortMode & sortMode) const;
     int GetValueSum() const;
 };
+
+template<typename T>
+inline T Problem::GetSortedItemIds(const SortMode & sortMode) const{
+    struct el{
+        int id;
+        int value;
+        int weight;
+    };
+    std::vector<el> toSort;
+    for (int i = 0; i < this->items.size(); ++i){
+        el e = {i, items[i].value, items[i].GetWeightSum()};
+        toSort.push_back(e);
+    }
+
+    switch (sortMode)
+    {
+    case SortMode::VALUE_WEIGHT_RATIO:
+        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
+            if (a.weight == 0 && b.weight == 0){
+                return a.value > b.value;
+            }
+            else if (a.weight == 0) return true;
+            else if (b.weight == 0) return false;
+            return (double)a.value / (double)a.weight > (double)b.value / (double)b.weight;
+        });
+        break;
+        
+    case SortMode::WEIGHT:
+        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
+            return a.weight < b.weight;
+        });
+        break;
+        
+    case SortMode::VALUE:
+        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
+            return a.value > b.value;
+        });
+        break;
+    
+    case SortMode::RANDOM:
+    {
+        T sortedIds;
+        while (sortedIds.size() < this->items.size())
+        {
+            int itemId = std::rand() % this->items.size();
+            while (std::find(sortedIds.begin(), sortedIds.end(), itemId) != sortedIds.end()){
+                itemId = std::rand() % this->items.size();
+            }
+            sortedIds.push_back(itemId);
+        }
+        return sortedIds;
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    T sortedIds;
+    for (int i = 0; i < toSort.size(); ++i){
+        sortedIds.push_back(toSort[i].id);
+    }
+    return sortedIds;
+}
 
 class PackagedProblem{
     public:

@@ -4,6 +4,7 @@
 #include <fstream> // std::ifstream
 #include <vector>
 #include <string>
+#include <deque>
 #include <cfloat> // DBL_MAX
 #include <functional> // std::function
 #include <thread>
@@ -199,6 +200,7 @@ class GreedyHeuristicSearchSolver{
         Problem::SortMode sort_mode = Problem::SortMode::VALUE_WEIGHT_RATIO;
         double coverage = -1.0;
         int to_visit = 2;
+        bool fast = false;
         Options() = default;
         explicit Options(std::vector<std::string> & args);
     };
@@ -206,8 +208,8 @@ class GreedyHeuristicSearchSolver{
     /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
     /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
     /// @param amount_to_visit for initial call pass `options.to_visit`
-    static Solution Universal(const PackagedProblem & problem, const Solution & current_solution, std::vector<int> sorted_item_ids, const int & amount_to_visit);
-    static Solution AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, std::vector<int> sorted_item_ids, const int & amount_to_visit);
+    static Solution FastUniversal(const PackagedProblem & problem, const Solution & current_solution, std::deque<int> sorted_item_ids, int amount_to_visit);
+    static Solution AccurateUniversal(const PackagedProblem & problem, const Solution & current_solution, std::deque<int> sorted_item_ids, int amount_to_visit);
     /// @param current_solution for initial call pass `Solution(problem.items.size(), problem.knapsack_sizes)` - this will construct empty solution.
     /// @param sorted_item_ids for initial call pass `problem.GetSortedItemIds(options.sort_mode);`
     /// @param amount_to_visit for initial call pass `options.coverage * problem.items.size()`

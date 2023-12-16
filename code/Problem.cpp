@@ -1,6 +1,5 @@
 #include "Problem.hpp"
 
-#include <algorithm> // std::sort, std::find
 #include <fstream> // std::ifstream, std::ofstream
 #include <filesystem> // std::filesystem::create_directory, std::filesystem::remove_all
 
@@ -148,69 +147,6 @@ void Problem::GenerateInnerItems(const int & instance_size, const int & sub_knap
         Item item(rand() % value_limit_exclusive, w, c);
         items.push_back(item);
     }
-}
-
-vector<int> Problem::GetSortedItemIds(const SortMode & sortMode) const{
-    struct el{
-        int id;
-        int value;
-        int weight;
-    };
-    vector<el> toSort;
-    for (int i = 0; i < this->items.size(); ++i){
-        el e = {i, items[i].value, items[i].GetWeightSum()};
-        toSort.push_back(e);
-    }
-
-    switch (sortMode)
-    {
-    case SortMode::VALUE_WEIGHT_RATIO:
-        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
-            if (a.weight == 0 && b.weight == 0){
-                return a.value > b.value;
-            }
-            else if (a.weight == 0) return true;
-            else if (b.weight == 0) return false;
-            return (double)a.value / (double)a.weight > (double)b.value / (double)b.weight;
-        });
-        break;
-        
-    case SortMode::WEIGHT:
-        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
-            return a.weight < b.weight;
-        });
-        break;
-        
-    case SortMode::VALUE:
-        std::sort(toSort.begin(), toSort.end(), [](el a, el b){
-            return a.value > b.value;
-        });
-        break;
-    
-    case SortMode::RANDOM:
-    {
-        vector<int> sortedIds;
-        while (sortedIds.size() < this->items.size())
-        {
-            int itemId = std::rand() % this->items.size();
-            while (std::find(sortedIds.begin(), sortedIds.end(), itemId) != sortedIds.end()){
-                itemId = std::rand() % this->items.size();
-            }
-            sortedIds.push_back(itemId);
-        }
-        return sortedIds;
-        break;
-    }
-
-    default:
-        break;
-    }
-
-    vector<int> sortedIds;
-    for (int i = 0; i < toSort.size(); ++i){
-        sortedIds.push_back(toSort[i].id);
-    }
-    return sortedIds;
 }
 
 int Problem::GetValueSum() const{

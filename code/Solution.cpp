@@ -205,13 +205,14 @@ bool Solution::IsValid(const PackagedProblem & problem) const{
     return IsFit(problem.problem) && IsStructure(problem);
 }
 
-bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, vector<int> _remaining_space, const int & current, const int & start) const{
+bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited, const vector<int> & _remaining_space, const int & current, const int & start) const{
     for (int next : problem.items[current].connections) {
         if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
 
             bool fit = true;
-            for (int j = 0; j < _remaining_space.size(); ++j){
-                if (_remaining_space[j] >= problem.items[next].weights[j]) _remaining_space[j] -= problem.items[next].weights[j];
+            vector<int> new_remaining_space(_remaining_space);
+            for (int j = 0; j < new_remaining_space.size(); ++j){
+                if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
                 else { fit = false; break; }
             }
             if (!fit) continue;
@@ -227,7 +228,7 @@ bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited
                 }
                 if (_found) return true; // it has - cycle found
             }
-            if (IsCyclePossibleDFS(problem, visited, _remaining_space, next, start)) return true; // cycle found later
+            if (IsCyclePossibleDFS(problem, visited, new_remaining_space, next, start)) return true; // cycle found later
             visited.pop_back();
         }
     }
@@ -236,9 +237,10 @@ bool Solution::IsCyclePossibleDFS(const Problem & problem, vector<int> & visited
 bool Solution::IsCyclePossible(const Problem & problem) const{
     if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
     vector<int> visited;
-    vector<int> _remaining_space = problem.knapsack_sizes;
     for(int i = 0; i < selected.size(); ++i){
+        
         bool fit = true;
+        vector<int> _remaining_space = problem.knapsack_sizes;
         for (int j = 0; j < _remaining_space.size(); ++j){
             if (_remaining_space[j] >= problem.items[i].weights[j]) _remaining_space[j] -= problem.items[i].weights[j];
             else { fit = false; break; }
@@ -252,16 +254,26 @@ bool Solution::IsCyclePossible(const Problem & problem) const{
     return false;
 }
 
-bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited, vector<int> _remaining_space, const int & current) const{
+bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited, const vector<int> & _remaining_space, const int & current) const{
     for (int next : problem.items[current].connections) {
         if (std::find(visited.begin(), visited.end(), next) == visited.end()){ // next item has to be new (not visited yet)
 
+#ifdef IS_PATH_DEBUG
+            cout << " ->" << next;
+#endif
+
             bool fit = true;
-            for (int j = 0; j < _remaining_space.size(); ++j){
-                if (_remaining_space[j] >= problem.items[next].weights[j]) _remaining_space[j] -= problem.items[next].weights[j];
+            vector<int> new_remaining_space(_remaining_space);
+            for (int j = 0; j < new_remaining_space.size(); ++j){
+                if (new_remaining_space[j] >= problem.items[next].weights[j]) new_remaining_space[j] -= problem.items[next].weights[j];
                 else { fit = false; break; }
             }
-            if (!fit) continue;
+            if (!fit) {
+#ifdef IS_PATH_DEBUG
+                cout << next << ">" << _remaining_space[0];
+#endif
+                continue;
+            }
 
             visited.push_back(next);
             // found some path lets check if it has all selected vertices
@@ -273,8 +285,11 @@ bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited,
                 }
             }
             if (_found) return true; // it has - path found
-            if (IsPathPossibleDFS(problem, visited, _remaining_space, next)) return true; // path found later
+            if (IsPathPossibleDFS(problem, visited, new_remaining_space, next)) return true; // path found later
             visited.pop_back();
+#ifdef IS_PATH_DEBUG
+            cout << " <-" << next;
+#endif
         }
     }
     return false; // cycle not found
@@ -282,9 +297,10 @@ bool Solution::IsPathPossibleDFS(const Problem & problem, vector<int> & visited,
 bool Solution::IsPathPossible(const Problem & problem) const{
     if (selected.size() != problem.items.size()) throw std::invalid_argument("amount of available items does not match");
     vector<int> visited;
-    vector<int> _remaining_space = problem.knapsack_sizes;
     for(int i = 0; i < selected.size(); ++i){
+        
         bool fit = true;
+        vector<int> _remaining_space = problem.knapsack_sizes;
         for (int j = 0; j < _remaining_space.size(); ++j){
             if (_remaining_space[j] >= problem.items[i].weights[j]) _remaining_space[j] -= problem.items[i].weights[j];
             else { fit = false; break; }
@@ -292,8 +308,23 @@ bool Solution::IsPathPossible(const Problem & problem) const{
         if (!fit) continue;
 
         visited.push_back(i);
+#ifdef IS_PATH_DEBUG
+        cout << "\n->>" << i;
+#endif
+        // found some path lets check if it has all selected vertices
+        bool _found = true;
+        for (int j = 0; j < this->selected.size(); ++j){
+            if (this->selected[j] && std::find(visited.begin(), visited.end(), j) == visited.end()){
+                _found = false;
+                break;
+            }
+        }
+        if (_found) return true; // it has - path found
         if (IsPathPossibleDFS(problem, visited, _remaining_space, i)) return true; // cycle found somewhere
         visited.pop_back();
+#ifdef IS_PATH_DEBUG
+        cout << " <-" << i;
+#endif
     }
     return false;
 }

@@ -109,6 +109,10 @@ GreedyHeuristicSearchSolver::Options::Options(std::vector<std::string> & args){
     CommandInterpreter::Consume<int>(args, "-to-visit", [](const string & arg, int & tvs){
         tvs = std::stod(arg);
     }, this->to_visit);
+    // fast
+    CommandInterpreter::Consume<bool>(args, "-fast", [](bool & fst){
+        fst = true;
+    }, this->fast);
     // sort method
     CommandInterpreter::Consume<Problem::SortMode>(args, "-sort", [](const string & arg, Problem::SortMode & sm){
         sm = ToSortMode(arg);
